@@ -3,6 +3,7 @@ body {
     font-family: Arial, sans-serif;
     margin: 0;
     padding: 30px;
+    padding-bottom: 90px;
 }
 
 h1 {
@@ -46,3 +47,28 @@ article {
     margin-bottom: 20px;
     box-shadow: 0px 2px 8px rgba(0,0,0,0.1);
 }
+
+footer {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+
+    display: flex;
+    justify-content: space-around;
+
+    padding: 12px 20px;
+    background-color: white;
+    box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+}
+
+footer button {
+    background: none;
+    color: #1f3b5b;
+    padding: 8px 12px;
+}
+
+footer button:hover {
+    background-color: #eaf6fb;
+}
+

@@ -1,48 +1,53 @@
 <!DOCTYPE html>
-<html lang="ko">
+<html>
 <head>
-    <meta charset="UTF-8">
     <title>NewsHub</title>
+
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
+
 <body>
-    <header>
-        <h1>NewsHub</h1>
-        <p>사용자 맞춤형 뉴스 큐레이션 서비스</p>
-    </header>
+
+    <h1>NewsHub</h1>
+
+    <p>사용자 맞춤형 뉴스 큐레이션 서비스</p>
+
+    <form>
+        <input type="text" placeholder="관심 있는 뉴스를 검색하세요">
+        <button type="submit">검색</button>
+    </form>
+
+    <nav>
+        <button>스포츠</button>
+        <button>연예</button>
+        <button>경제</button>
+        <button>IT</button>
+        <button>사회</button>
+        <button>생활문화</button>
+    </nav>
 
     <main>
-        <section>
-            <input type="text" placeholder="관심 있는 뉴스를 검색하세요">
-            <button type="button">검색</button>
-        </section>
 
-        <nav>
-            <button type="button">전체</button>
-            <button type="button">경제</button>
-            <button type="button">IT</button>
-            <button type="button">사회</button>
-            <button type="button">스포츠</button>
-        </nav>
+        <h2>오늘의 뉴스</h2>
 
-        <section>
-            <h2>오늘의 뉴스</h2>
+        {% for news in news_list %}
+        <article>
+            <h3>{{ news.title }}</h3>
 
-            <article>
-                <h3>인공지능 기술이 산업 전반에 빠르게 확산되고 있습니다.</h3>
-                <p>첫 번째 테스트 뉴스입니다.</p>
-            </article>
+            <small>{{ news.date }} | {{ news.source }}</small>
 
-            <article>
-                <h3>공공기관의 디지털 전환이 본격적으로 추진되고 있습니다.</h3>
-                <p>두 번째 테스트 뉴스입니다.</p>
-            </article>
+            <p>{{ news.content }}</p>
+        </article>
+        {% endfor %}
 
-            <article>
-                <h3>반도체 시장의 성장세가 이어지고 있습니다.</h3>
-                <p>세 번째 테스트 뉴스입니다.</p>
-            </article>
-        </section>
     </main>
+
+    <footer>
+        <button type="button">홈</button>
+        <button type="button">전체기사</button>
+        <button type="button">즐겨찾기</button>
+        <button type="button">로그인</button>
+    </footer>
+
 </body>
 </html>
