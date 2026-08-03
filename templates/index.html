@@ -12,11 +12,15 @@
 
     <p>사용자 맞춤형 뉴스 큐레이션 서비스</p>
 
-    <form>
-        <input type="text" placeholder="관심 있는 뉴스를 검색하세요">
+    <form method="GET" action="/">
+        <input
+            type="text"
+            name="q"
+            placeholder="관심 있는 뉴스를 검색하세요"
+            value="{{ query }}"
+        >
         <button type="submit">검색</button>
     </form>
-
     <nav>
         <button>스포츠</button>
         <button>연예</button>
