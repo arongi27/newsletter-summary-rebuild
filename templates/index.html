@@ -33,16 +33,18 @@
     </div>
 
     {% if popular_keywords %}
-    <h3>🔥 인기 검색어 TOP 5</h3>
+    <section class="popular-box">
+        <h3>🔥 인기 검색어 TOP 5</h3>
 
-    <ol>
-        {% for keyword, count in popular_keywords %}
-        <li>
-            <a href="/?q={{ keyword }}">{{ keyword }}</a>
-            ({{ count }})
-        </li>
-        {% endfor %}
-    </ol>
+        <ol class="popular-list">
+            {% for keyword, count in popular_keywords %}
+            <li>
+                <a href="/?q={{ keyword }}">{{ keyword }}</a>
+                <span>{{ count }}회</span>
+            </li>
+            {% endfor %}
+        </ol>
+    </section>
     {% endif %}
 
     <nav>

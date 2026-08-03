@@ -148,3 +148,139 @@ footer a {
 footer a:hover {
     font-weight: bold;
 }
+
+main {
+    max-width: 900px;
+    margin: 40px auto 100px;
+    padding: 0 20px;
+}
+
+main h2 {
+    margin-bottom: 20px;
+    color: #173b63;
+}
+
+article {
+    margin-bottom: 20px;
+    padding: 24px;
+    background-color: #ffffff;
+    border: 1px solid #dce8f2;
+    border-radius: 16px;
+    box-shadow: 0 6px 18px rgba(30, 70, 110, 0.08);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+article:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 10px 24px rgba(30, 70, 110, 0.14);
+}
+
+article h3 {
+    margin-top: 0;
+    margin-bottom: 10px;
+    color: #173b63;
+    line-height: 1.5;
+}
+
+article small {
+    color: #7a8a99;
+}
+
+article p {
+    margin-top: 14px;
+    color: #44515d;
+    line-height: 1.7;
+}
+
+body > h1,
+body > p,
+.search-area {
+    max-width: 900px;
+    margin-left: auto;
+    margin-right: auto;
+    text-align: center;
+}
+
+body > h1 {
+    margin-top: 40px;
+    margin-bottom: 10px;
+    color: #173b63;
+}
+
+body > p {
+    margin-bottom: 20px;
+    color: #5f7182;
+}
+
+.search-area form {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+}
+
+#search-input {
+    width: 420px;
+    padding: 12px 16px;
+    border: 1px solid #c8d7e4;
+    border-radius: 24px;
+    outline: none;
+}
+
+#search-input:focus {
+    border-color: #55a9df;
+    box-shadow: 0 0 0 3px rgba(85, 169, 223, 0.15);
+}
+
+#search-form button {
+    padding: 12px 20px;
+    border: none;
+    border-radius: 24px;
+    background-color: #55a9df;
+    color: white;
+    cursor: pointer;
+}
+
+#search-form button:hover {
+    background-color: #378fc8;
+}
+
+.popular-box {
+    max-width: 900px;
+    margin: 24px auto;
+    padding: 14px 20px;
+    background-color: #ffffff;
+    border: 1px solid #dce8f2;
+    border-radius: 14px;
+    box-shadow: 0 4px 14px rgba(30, 70, 110, 0.07);
+}
+
+.popular-box h3 {
+    margin: 0 0 14px;
+    color: #173b63;
+}
+
+.popular-list {
+    margin: 0;
+    padding-left: 24px;
+}
+
+.popular-list li {
+    margin: 8px 0;
+    color: #44515d;
+}
+
+.popular-list li a {
+    margin-right: 8px;
+    color: #1a4f8b;
+    text-decoration: none;
+    font-weight: bold;
+}
+
+.popular-list li span {
+    color: #8a98a6;
+    font-size: 13px;
+}
+
+.popular-list li a:hover {
+    color: #378fc8;
+}
