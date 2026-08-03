@@ -72,3 +72,44 @@ footer button:hover {
     background-color: #eaf6fb;
 }
 
+ol li a {
+    text-decoration: none;
+    color: #1a4f8b;
+    font-weight: bold;
+}
+
+ol li a:hover {
+    color: #4da3ff;
+}
+
+.search-area {
+    position: relative;
+}
+
+#autocomplete-list {
+    position: absolute;
+    z-index: 10;
+    width: 310px;
+    margin: 4px 0 0;
+    padding: 0;
+    list-style: none;
+    background-color: white;
+    border: 1px solid #cccccc;
+    border-radius: 8px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+}
+
+#autocomplete-list:empty {
+    display: none;
+}
+
+#autocomplete-list li a {
+    display: block;
+    padding: 10px 12px;
+    color: #1a4f8b;
+    text-decoration: none;
+}
+
+#autocomplete-list li a:hover {
+    background-color: #eef7fc;
+}

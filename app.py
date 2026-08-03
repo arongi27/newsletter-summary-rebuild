@@ -2,8 +2,11 @@ from flask import Flask, render_template, request, redirect, url_for, session
 from werkzeug.security import generate_password_hash, check_password_hash
 import sqlite3
 
+
 app = Flask(__name__)
 app.secret_key = "newshub_secret_key"
+
+
 def init_db():
     connection = sqlite3.connect("news.db")
 
@@ -15,7 +18,16 @@ def init_db():
         )
     """)
 
+    connection.execute("""
+        CREATE TABLE IF NOT EXISTS search_keywords (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            keyword TEXT NOT NULL UNIQUE,
+            count INTEGER NOT NULL DEFAULT 1
+        )
+    """)
+
     connection.close()
+
 
 news_list = [
     {
@@ -38,11 +50,40 @@ news_list = [
     }
 ]
 
+
 @app.route("/")
 def home():
     query = request.args.get("q", "").strip()
 
     if query:
+        connection = sqlite3.connect("news.db")
+
+        existing_keyword = connection.execute(
+            "SELECT * FROM search_keywords WHERE keyword = ?",
+            (query,)
+        ).fetchone()
+
+        if existing_keyword:
+            connection.execute(
+                """
+                UPDATE search_keywords
+                SET count = count + 1
+                WHERE keyword = ?
+                """,
+                (query,)
+            )
+        else:
+            connection.execute(
+                """
+                INSERT INTO search_keywords (keyword)
+                VALUES (?)
+                """,
+                (query,)
+            )
+
+        connection.commit()
+        connection.close()
+
         filtered_news = [
             news for news in news_list
             if query.lower() in news["title"].lower()
@@ -51,16 +92,31 @@ def home():
     else:
         filtered_news = news_list
 
+    connection = sqlite3.connect("news.db")
+
+    popular_keywords = connection.execute(
+        """
+        SELECT keyword, count
+        FROM search_keywords
+        ORDER BY count DESC, keyword ASC
+        LIMIT 5
+        """
+    ).fetchall()
+
+    connection.close()
+
     return render_template(
         "index.html",
         news_list=filtered_news,
-        query=query
+        query=query,
+        popular_keywords=popular_keywords
     )
+
 
 @app.route("/signup", methods=["GET", "POST"])
 def signup():
     if request.method == "POST":
-        username = request.form["username"]
+        username = request.form["username"].strip()
         password = request.form["password"]
 
         hashed_password = generate_password_hash(password)
@@ -77,9 +133,13 @@ def signup():
             return "이미 존재하는 아이디입니다."
 
         connection.execute(
-            "INSERT INTO users (username, password) VALUES (?, ?)",
+            """
+            INSERT INTO users (username, password)
+            VALUES (?, ?)
+            """,
             (username, hashed_password)
         )
+
         connection.commit()
         connection.close()
 
@@ -87,10 +147,11 @@ def signup():
 
     return render_template("signup.html")
 
+
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
-        username = request.form["username"]
+        username = request.form["username"].strip()
         password = request.form["password"]
 
         connection = sqlite3.connect("news.db")
@@ -105,11 +166,32 @@ def login():
         if user and check_password_hash(user[2], password):
             session["username"] = username
             return redirect(url_for("home"))
-        else:
-            return "아이디 또는 비밀번호가 올바르지 않습니다."
+
+        return "아이디 또는 비밀번호가 올바르지 않습니다."
 
     return render_template("login.html")
+@app.route("/autocomplete")
+def autocomplete():
+    query = request.args.get("q", "").strip()
 
+    connection = sqlite3.connect("news.db")
+
+    keywords = connection.execute(
+        """
+        SELECT keyword
+        FROM search_keywords
+        WHERE keyword LIKE ?
+        ORDER BY count DESC
+        LIMIT 5
+        """,
+        (f"{query}%",)
+    ).fetchall()
+
+    connection.close()
+
+    return {
+        "keywords": [k[0] for k in keywords]
+    }
 
 if __name__ == "__main__":
     init_db()
