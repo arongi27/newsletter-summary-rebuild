@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>관심 뉴스 - NewsHub</title>
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', filename='style.css') }}"
+    >
+</head>
+
+<body>
+
+    <h1>관심 뉴스</h1>
+
+    <form method="POST" action="{{ url_for('add_interest') }}">
+        <input
+            type="text"
+            name="keyword"
+            placeholder="관심 키워드를 입력하세요"
+            required
+        >
+        <button type="submit">추가</button>
+    </form>
+
+    <h2>내 관심 키워드</h2>
+
+    {% if keywords %}
+        <ul>
+            {% for keyword in keywords %}
+            <li>
+                {{ keyword[1] }}
+
+                <form
+                    method="POST"
+                    action="{{ url_for(
+                        'delete_interest',
+                        interest_id=keyword[0]
+                    ) }}"
+                    style="display: inline;"
+                >
+                    <button type="submit">삭제</button>
+                </form>
+            </li>
+            {% endfor %}
+        </ul>
+    {% else %}
+        <p>등록한 관심 키워드가 없습니다.</p>
+    {% endif %}
+
+    <h2>추천 뉴스</h2>
+
+    {% if recommended_news %}
+        {% for news in recommended_news %}
+        <article>
+            <h3>{{ news.title }}</h3>
+
+            <small>
+                {{ news.date }} | {{ news.source }}
+            </small>
+
+            <p>{{ news.content }}</p>
+        </article>
+        {% endfor %}
+    {% else %}
+        <p>관심 키워드와 일치하는 뉴스가 없습니다.</p>
+    {% endif %}
+
+    <p>
+        <a href="{{ url_for('home') }}">← 메인 화면으로 돌아가기</a>
+    </p>
+
+</body>
+</html>

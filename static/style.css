@@ -113,3 +113,38 @@ ol li a:hover {
 #autocomplete-list li a:hover {
     background-color: #eef7fc;
 }
+
+.favorite-button {
+    margin-top: 12px;
+    padding: 8px 14px;
+    border: none;
+    border-radius: 18px;
+    background-color: #ffd966;
+    cursor: pointer;
+}
+
+.favorite-button:hover {
+    background-color: #f4c542;
+}
+
+.delete-button {
+    margin-top: 12px;
+    padding: 8px 14px;
+    border: none;
+    border-radius: 18px;
+    background-color: #eeeeee;
+    cursor: pointer;
+}
+
+.delete-button:hover {
+    background-color: #dddddd;
+}
+
+footer a {
+    color: #1a4f8b;
+    text-decoration: none;
+}
+
+footer a:hover {
+    font-weight: bold;
+}

@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>즐겨찾기 - NewsHub</title>
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', filename='style.css') }}"
+    >
+</head>
+
+<body>
+
+    <h1>즐겨찾기</h1>
+
+    <p>
+        <a href="{{ url_for('home') }}">← 메인 화면으로 돌아가기</a>
+    </p>
+
+    <main>
+        {% if favorite_news %}
+
+            {% for news in favorite_news %}
+            <article>
+                <h3>{{ news[1] }}</h3>
+
+                <small>
+                    {{ news[3] }} | {{ news[4] }}
+                </small>
+
+                <p>{{ news[2] }}</p>
+
+                <form
+                    method="POST"
+                    action="{{ url_for(
+                        'delete_favorite',
+                        favorite_id=news[0]
+                    ) }}"
+                >
+                    <button type="submit" class="delete-button">
+                        즐겨찾기 삭제
+                    </button>
+                </form>
+            </article>
+            {% endfor %}
+
+        {% else %}
+
+            <p>아직 즐겨찾기한 뉴스가 없습니다.</p>
+
+        {% endif %}
+    </main>
+
+</body>
+</html>

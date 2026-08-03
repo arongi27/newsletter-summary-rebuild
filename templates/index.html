@@ -46,40 +46,56 @@
     {% endif %}
 
     <nav>
-        <button>스포츠</button>
-        <button>연예</button>
-        <button>경제</button>
-        <button>IT</button>
-        <button>사회</button>
-        <button>생활문화</button>
+        <button type="button">스포츠</button>
+        <button type="button">연예</button>
+        <button type="button">경제</button>
+        <button type="button">IT</button>
+        <button type="button">사회</button>
+        <button type="button">생활문화</button>
     </nav>
 
     <main>
-
         <h2>오늘의 뉴스</h2>
 
         {% for news in news_list %}
         <article>
             <h3>{{ news.title }}</h3>
 
-            <small>{{ news.date }} | {{ news.source }}</small>
+            <small>
+                {{ news.date }} | {{ news.source }}
+            </small>
 
             <p>{{ news.content }}</p>
+
+            <form
+                method="POST"
+                action="{{ url_for('add_favorite', news_id=news.id) }}"
+            >
+                <button type="submit" class="favorite-button">
+                    ⭐ 즐겨찾기
+                </button>
+            </form>
         </article>
         {% endfor %}
-
     </main>
 
     <footer>
-        <button type="button">홈</button>
-        <button type="button">전체기사</button>
-        <button type="button">즐겨찾기</button>
-        <button type="button">로그인</button>
+        <a href="{{ url_for('home') }}">홈</a>
+        <a href="{{ url_for('home') }}">전체기사</a>
+        <a href="{{ url_for('favorites') }}">즐겨찾기</a>
+        <a href="{{ url_for('interests') }}">관심뉴스</a>
+
+        {% if session.get("username") %}
+        <a href="{{ url_for('logout') }}">로그아웃</a>
+        {% else %}
+        <a href="{{ url_for('login') }}">로그인</a>
+        {% endif %}
     </footer>
 
     <script>
         const searchInput = document.getElementById("search-input");
-        const autocompleteList = document.getElementById("autocomplete-list");
+        const autocompleteList =
+            document.getElementById("autocomplete-list");
 
         searchInput.addEventListener("input", async function () {
             const query = searchInput.value.trim();
