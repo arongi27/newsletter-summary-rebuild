@@ -229,23 +229,25 @@ nav {
     box-shadow: 0 4px 14px rgba(30, 70, 110, 0.07);
 }
 
-nav button {
+nav a {
+    display: flex;
+    justify-content: center;
+    align-items: center;
     min-height: 56px;
     padding: 16px 12px;
-    border: none;
     border-right: 1px solid #dce8f2;
-    border-radius: 0;
     background-color: transparent;
     color: #173b63;
     font-size: 14px;
     font-weight: bold;
+    text-decoration: none;
 }
 
-nav button:last-child {
+nav a:last-child {
     border-right: none;
 }
 
-nav button:hover {
+nav a:hover {
     background-color: #55a9df;
     color: #ffffff;
 }
@@ -602,4 +604,45 @@ footer a:hover {
         padding: 7px 5px;
         font-size: 13px;
     }
+}
+
+.news-title-link {
+    color: #173b63;
+    text-decoration: none;
+}
+
+.news-title-link:hover {
+    color: #378fc8;
+    text-decoration: underline;
+}
+
+.article-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 16px;
+}
+
+.article-actions form {
+    margin: 0;
+}
+
+.article-actions .favorite-button {
+    margin-top: 0;
+}
+
+.read-more-link {
+    display: inline-flex;
+    align-items: center;
+    padding: 8px 14px;
+    border-radius: 18px;
+    background-color: #55a9df;
+    color: #ffffff;
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: bold;
+}
+
+.read-more-link:hover {
+    background-color: #378fc8;
 }

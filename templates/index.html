@@ -71,21 +71,38 @@
     {% endif %}
 
     <nav>
-        <button type="button">스포츠</button>
-        <button type="button">연예</button>
-        <button type="button">경제</button>
-        <button type="button">IT</button>
-        <button type="button">사회</button>
-        <button type="button">생활문화</button>
+        <a href="{{ url_for('home', category='스포츠') }}">스포츠</a>
+        <a href="{{ url_for('home', category='연예') }}">연예</a>
+        <a href="{{ url_for('home', category='경제') }}">경제</a>
+        <a href="{{ url_for('home', category='IT') }}">IT</a>
+        <a href="{{ url_for('home', category='사회') }}">사회</a>
+        <a href="{{ url_for('home', category='생활문화') }}">생활문화</a>
     </nav>
 
     <main>
-        <h2>오늘의 뉴스</h2>
+        <h2>
+            {% if query %}
+                '{{ query }}' 검색 결과
+            {% elif category %}
+                '{{ category }}' 카테고리 뉴스
+            {% else %}
+                오늘의 뉴스
+            {% endif %}
+        </h2>
 
         {% if news_list %}
             {% for news in news_list %}
             <article>
-                <h3>{{ news.title }}</h3>
+                <h3>
+                    <a
+                        href="{{ news.link }}"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="news-title-link"
+                    >
+                        {{ news.title }}
+                    </a>
+                </h3>
 
                 <small>
                     {{ news.date }} | {{ news.source }}
@@ -100,6 +117,36 @@
                         news_id=news.id
                     ) }}"
                 >
+                    <input
+                        type="hidden"
+                        name="news_title"
+                        value="{{ news.title }}"
+                    >
+
+                    <input
+                        type="hidden"
+                        name="news_content"
+                        value="{{ news.content }}"
+                    >
+
+                    <input
+                        type="hidden"
+                        name="news_date"
+                        value="{{ news.date }}"
+                    >
+
+                    <input
+                        type="hidden"
+                        name="news_source"
+                        value="{{ news.source }}"
+                    >
+
+                    <input
+                        type="hidden"
+                        name="news_link"
+                        value="{{ news.link }}"
+                    >
+
                     <button
                         type="submit"
                         class="favorite-button"
