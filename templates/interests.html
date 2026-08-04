@@ -2,7 +2,8 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>관심 뉴스 - NewsHub</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>추천뉴스 - NewsHub</title>
 
     <link
         rel="stylesheet"
@@ -12,64 +13,88 @@
 
 <body>
 
-    <h1>관심 뉴스</h1>
+    <div class="title-row">
+        <h1>추천뉴스</h1>
 
-    <form method="POST" action="{{ url_for('add_interest') }}">
-        <input
-            type="text"
-            name="keyword"
-            placeholder="관심 키워드를 입력하세요"
-            required
-        >
-        <button type="submit">추가</button>
-    </form>
+        {% if session.get("username") %}
+            <a href="{{ url_for('profile') }}" class="profile-icon">
+                👤
+            </a>
+        {% else %}
+            <a href="{{ url_for('login') }}" class="profile-icon">
+                👤
+            </a>
+        {% endif %}
+    </div>
 
-    <h2>내 관심 키워드</h2>
+    <main>
 
-    {% if keywords %}
-        <ul>
-            {% for keyword in keywords %}
-            <li>
-                {{ keyword[1] }}
+        <section class="interest-section">
+            <h2>내 주요 관심 키워드</h2>
+
+            {% if keywords %}
+                <div class="keyword-list">
+                    {% for keyword, count in keywords %}
+                    <a
+                        class="keyword-tag"
+                        href="{{ url_for('home', q=keyword) }}"
+                    >
+                        {{ keyword }}
+                        <span>{{ count }}회</span>
+                    </a>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <p>
+                    아직 분석할 검색 기록이 없습니다.
+                    로그인 상태에서 뉴스를 검색해 보세요.
+                </p>
+            {% endif %}
+        </section>
+
+        <h2>맞춤 추천 뉴스</h2>
+
+        {% if recommended_news %}
+            {% for news in recommended_news %}
+            <article>
+                <h3>{{ news.title }}</h3>
+
+                <small>
+                    {{ news.date }} | {{ news.source }}
+                </small>
+
+                <p>{{ news.content }}</p>
 
                 <form
                     method="POST"
                     action="{{ url_for(
-                        'delete_interest',
-                        interest_id=keyword[0]
+                        'add_favorite',
+                        news_id=news.id
                     ) }}"
-                    style="display: inline;"
                 >
-                    <button type="submit">삭제</button>
+                    <button
+                        type="submit"
+                        class="favorite-button"
+                    >
+                        ⭐ 즐겨찾기
+                    </button>
                 </form>
-            </li>
+            </article>
             {% endfor %}
-        </ul>
-    {% else %}
-        <p>등록한 관심 키워드가 없습니다.</p>
-    {% endif %}
 
-    <h2>추천 뉴스</h2>
+        {% else %}
+            <p>
+                현재 주요 관심 키워드와 일치하는 뉴스가 없습니다.
+            </p>
+        {% endif %}
 
-    {% if recommended_news %}
-        {% for news in recommended_news %}
-        <article>
-            <h3>{{ news.title }}</h3>
+    </main>
 
-            <small>
-                {{ news.date }} | {{ news.source }}
-            </small>
-
-            <p>{{ news.content }}</p>
-        </article>
-        {% endfor %}
-    {% else %}
-        <p>관심 키워드와 일치하는 뉴스가 없습니다.</p>
-    {% endif %}
-
-    <p>
-        <a href="{{ url_for('home') }}">← 메인 화면으로 돌아가기</a>
-    </p>
+    <footer>
+        <a href="{{ url_for('home') }}">홈</a>
+        <a href="{{ url_for('favorites') }}">즐겨찾기</a>
+        <a href="{{ url_for('interests') }}">추천뉴스</a>
+    </footer>
 
 </body>
 </html>

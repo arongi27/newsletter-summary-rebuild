@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>프로필 - NewsHub</title>
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', filename='style.css') }}"
+    >
+</head>
+
+<body>
+
+    <div class="title-row">
+        <h1>내 프로필</h1>
+
+        <a href="{{ url_for('profile') }}" class="profile-icon">
+            👤
+        </a>
+    </div>
+
+    <main>
+
+        <article style="text-align:center;">
+
+            <div style="font-size:70px;">👤</div>
+
+            <h2>{{ username }}</h2>
+
+            <p>
+                NewsHub 회원
+            </p>
+
+        </article>
+
+        <article>
+
+            <h3>📊 이용 현황</h3>
+
+            <p>
+                🔍 총 검색 횟수 :
+                <strong>{{ search_count }}회</strong>
+            </p>
+
+            <p>
+                ⭐ 즐겨찾기 :
+                <strong>{{ favorite_count }}개</strong>
+            </p>
+
+            <p>
+                🔥 가장 많이 검색한 키워드 :
+                <strong>{{ top_keyword }}</strong>
+            </p>
+
+        </article>
+
+        <article style="text-align:center;">
+
+            <a href="{{ url_for('logout') }}">
+                <button class="delete-button">
+                    로그아웃
+                </button>
+            </a>
+
+        </article>
+
+    </main>
+
+    <footer>
+        <a href="{{ url_for('home') }}">홈</a>
+        <a href="{{ url_for('favorites') }}">즐겨찾기</a>
+        <a href="{{ url_for('interests') }}">추천뉴스</a>
+    </footer>
+
+</body>
+</html>

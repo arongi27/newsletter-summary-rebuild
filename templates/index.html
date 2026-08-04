@@ -2,6 +2,7 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>NewsHub</title>
 
     <link
@@ -12,12 +13,28 @@
 
 <body>
 
-    <h1>NewsHub</h1>
+    <div class="title-row">
+        <h1>NewsHub</h1>
+
+        {% if session.get("username") %}
+            <a href="{{ url_for('profile') }}" class="profile-icon">
+                👤
+            </a>
+        {% else %}
+            <a href="{{ url_for('login') }}" class="profile-icon">
+                👤
+            </a>
+        {% endif %}
+    </div>
 
     <p>사용자 맞춤형 뉴스 큐레이션 서비스</p>
 
     <div class="search-area">
-        <form method="GET" action="/" id="search-form">
+        <form
+            method="GET"
+            action="{{ url_for('home') }}"
+            id="search-form"
+        >
             <input
                 type="text"
                 id="search-input"
@@ -26,7 +43,10 @@
                 value="{{ query }}"
                 autocomplete="off"
             >
-            <button type="submit">검색</button>
+
+            <button type="submit">
+                검색
+            </button>
         </form>
 
         <ul id="autocomplete-list"></ul>
@@ -39,7 +59,10 @@
         <ol class="popular-list">
             {% for keyword, count in popular_keywords %}
             <li>
-                <a href="/?q={{ keyword }}">{{ keyword }}</a>
+                <a href="{{ url_for('home', q=keyword) }}">
+                    {{ keyword }}
+                </a>
+
                 <span>{{ count }}회</span>
             </li>
             {% endfor %}
@@ -59,43 +82,49 @@
     <main>
         <h2>오늘의 뉴스</h2>
 
-        {% for news in news_list %}
-        <article>
-            <h3>{{ news.title }}</h3>
+        {% if news_list %}
+            {% for news in news_list %}
+            <article>
+                <h3>{{ news.title }}</h3>
 
-            <small>
-                {{ news.date }} | {{ news.source }}
-            </small>
+                <small>
+                    {{ news.date }} | {{ news.source }}
+                </small>
 
-            <p>{{ news.content }}</p>
+                <p>{{ news.content }}</p>
 
-            <form
-                method="POST"
-                action="{{ url_for('add_favorite', news_id=news.id) }}"
-            >
-                <button type="submit" class="favorite-button">
-                    ⭐ 즐겨찾기
-                </button>
-            </form>
-        </article>
-        {% endfor %}
+                <form
+                    method="POST"
+                    action="{{ url_for(
+                        'add_favorite',
+                        news_id=news.id
+                    ) }}"
+                >
+                    <button
+                        type="submit"
+                        class="favorite-button"
+                    >
+                        ⭐ 즐겨찾기
+                    </button>
+                </form>
+            </article>
+            {% endfor %}
+
+        {% else %}
+            <p>검색 결과가 없습니다.</p>
+        {% endif %}
     </main>
 
     <footer>
         <a href="{{ url_for('home') }}">홈</a>
-        <a href="{{ url_for('home') }}">전체기사</a>
         <a href="{{ url_for('favorites') }}">즐겨찾기</a>
-        <a href="{{ url_for('interests') }}">관심뉴스</a>
-
-        {% if session.get("username") %}
-        <a href="{{ url_for('logout') }}">로그아웃</a>
-        {% else %}
-        <a href="{{ url_for('login') }}">로그인</a>
-        {% endif %}
+        <a href="{{ url_for('interests') }}">추천뉴스</a>
     </footer>
 
     <script>
-        const searchInput = document.getElementById("search-input");
+        const searchInput =
+            document.getElementById("search-input");
+
         const autocompleteList =
             document.getElementById("autocomplete-list");
 
@@ -114,7 +143,9 @@
                 );
 
                 if (!response.ok) {
-                    throw new Error("자동완성 요청에 실패했습니다.");
+                    throw new Error(
+                        "자동완성 요청에 실패했습니다."
+                    );
                 }
 
                 const data = await response.json();
@@ -123,7 +154,9 @@
                     const item = document.createElement("li");
                     const link = document.createElement("a");
 
-                    link.href = `/?q=${encodeURIComponent(keyword)}`;
+                    link.href =
+                        `/?q=${encodeURIComponent(keyword)}`;
+
                     link.textContent = keyword;
 
                     item.appendChild(link);

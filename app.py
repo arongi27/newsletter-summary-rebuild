@@ -18,6 +18,7 @@ def init_db():
         )
     """)
 
+    # 전체 사용자의 인기 검색어를 저장하는 테이블
     connection.execute("""
         CREATE TABLE IF NOT EXISTS search_keywords (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -39,15 +40,18 @@ def init_db():
         )
     """)
 
+    # 로그인 사용자별 검색 기록을 저장하는 테이블
     connection.execute("""
-        CREATE TABLE IF NOT EXISTS interest_keywords (
+        CREATE TABLE IF NOT EXISTS user_search_keywords (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT NOT NULL,
             keyword TEXT NOT NULL,
+            count INTEGER NOT NULL DEFAULT 1,
             UNIQUE(username, keyword)
         )
     """)
 
+    connection.commit()
     connection.close()
 
 
@@ -83,8 +87,13 @@ def home():
     if query:
         connection = sqlite3.connect("news.db")
 
+        # 전체 인기 검색어 집계
         existing_keyword = connection.execute(
-            "SELECT * FROM search_keywords WHERE keyword = ?",
+            """
+            SELECT id
+            FROM search_keywords
+            WHERE keyword = ?
+            """,
             (query,)
         ).fetchone()
 
@@ -106,6 +115,40 @@ def home():
                 (query,)
             )
 
+        # 로그인한 사용자의 개인 검색 기록 집계
+        username = session.get("username")
+
+        if username:
+            existing_user_keyword = connection.execute(
+                """
+                SELECT id
+                FROM user_search_keywords
+                WHERE username = ? AND keyword = ?
+                """,
+                (username, query)
+            ).fetchone()
+
+            if existing_user_keyword:
+                connection.execute(
+                    """
+                    UPDATE user_search_keywords
+                    SET count = count + 1
+                    WHERE username = ? AND keyword = ?
+                    """,
+                    (username, query)
+                )
+            else:
+                connection.execute(
+                    """
+                    INSERT INTO user_search_keywords (
+                        username,
+                        keyword
+                    )
+                    VALUES (?, ?)
+                    """,
+                    (username, query)
+                )
+
         connection.commit()
         connection.close()
 
@@ -114,6 +157,7 @@ def home():
             if query.lower() in news["title"].lower()
             or query.lower() in news["content"].lower()
         ]
+
     else:
         filtered_news = news_list
 
@@ -152,7 +196,7 @@ def autocomplete():
         SELECT keyword
         FROM search_keywords
         WHERE keyword LIKE ?
-        ORDER BY count DESC
+        ORDER BY count DESC, keyword ASC
         LIMIT 5
         """,
         (f"{query}%",)
@@ -176,7 +220,11 @@ def signup():
         connection = sqlite3.connect("news.db")
 
         existing_user = connection.execute(
-            "SELECT * FROM users WHERE username = ?",
+            """
+            SELECT id
+            FROM users
+            WHERE username = ?
+            """,
             (username,)
         ).fetchone()
 
@@ -209,7 +257,11 @@ def login():
         connection = sqlite3.connect("news.db")
 
         user = connection.execute(
-            "SELECT * FROM users WHERE username = ?",
+            """
+            SELECT id, username, password
+            FROM users
+            WHERE username = ?
+            """,
             (username,)
         ).fetchone()
 
@@ -249,7 +301,7 @@ def add_favorite(news_id):
 
     existing_favorite = connection.execute(
         """
-        SELECT *
+        SELECT id
         FROM favorites
         WHERE username = ? AND news_id = ?
         """,
@@ -341,44 +393,6 @@ def delete_favorite(favorite_id):
     return redirect(url_for("favorites"))
 
 
-@app.route("/interest/add", methods=["POST"])
-def add_interest():
-    username = session.get("username")
-
-    if not username:
-        return redirect(url_for("login"))
-
-    keyword = request.form["keyword"].strip()
-
-    if not keyword:
-        return redirect(url_for("interests"))
-
-    connection = sqlite3.connect("news.db")
-
-    existing_keyword = connection.execute(
-        """
-        SELECT *
-        FROM interest_keywords
-        WHERE username = ? AND keyword = ?
-        """,
-        (username, keyword)
-    ).fetchone()
-
-    if not existing_keyword:
-        connection.execute(
-            """
-            INSERT INTO interest_keywords (username, keyword)
-            VALUES (?, ?)
-            """,
-            (username, keyword)
-        )
-        connection.commit()
-
-    connection.close()
-
-    return redirect(url_for("interests"))
-
-
 @app.route("/interests")
 def interests():
     username = session.get("username")
@@ -388,21 +402,24 @@ def interests():
 
     connection = sqlite3.connect("news.db")
 
+    # 현재 로그인한 사용자가 가장 많이 검색한 키워드 5개
     keywords = connection.execute(
         """
-        SELECT id, keyword
-        FROM interest_keywords
+        SELECT keyword, count
+        FROM user_search_keywords
         WHERE username = ?
-        ORDER BY keyword ASC
+        ORDER BY count DESC, keyword ASC
+        LIMIT 5
         """,
         (username,)
     ).fetchall()
 
     connection.close()
 
-    keyword_list = [row[1] for row in keywords]
+    keyword_list = [row[0] for row in keywords]
     recommended_news = []
 
+    # 주요 검색어와 제목 또는 내용이 일치하는 뉴스 추천
     for news in news_list:
         for keyword in keyword_list:
             if (
@@ -418,9 +435,8 @@ def interests():
         recommended_news=recommended_news
     )
 
-
-@app.route("/interest/delete/<int:interest_id>", methods=["POST"])
-def delete_interest(interest_id):
+@app.route("/profile")
+def profile():
     username = session.get("username")
 
     if not username:
@@ -428,19 +444,52 @@ def delete_interest(interest_id):
 
     connection = sqlite3.connect("news.db")
 
-    connection.execute(
+    favorite_count = connection.execute(
         """
-        DELETE FROM interest_keywords
-        WHERE id = ? AND username = ?
+        SELECT COUNT(*)
+        FROM favorites
+        WHERE username = ?
         """,
-        (interest_id, username)
-    )
+        (username,)
+    ).fetchone()[0]
 
-    connection.commit()
+    search_count = connection.execute(
+        """
+        SELECT COALESCE(SUM(count), 0)
+        FROM user_search_keywords
+        WHERE username = ?
+        """,
+        (username,)
+    ).fetchone()[0]
+
+    top_keyword_row = connection.execute(
+        """
+        SELECT keyword, count
+        FROM user_search_keywords
+        WHERE username = ?
+        ORDER BY count DESC, keyword ASC
+        LIMIT 1
+        """,
+        (username,)
+    ).fetchone()
+
     connection.close()
 
-    return redirect(url_for("interests"))
+    if top_keyword_row:
+        top_keyword = top_keyword_row[0]
+        top_keyword_count = top_keyword_row[1]
+    else:
+        top_keyword = "아직 없음"
+        top_keyword_count = 0
 
+    return render_template(
+        "profile.html",
+        username=username,
+        favorite_count=favorite_count,
+        search_count=search_count,
+        top_keyword=top_keyword,
+        top_keyword_count=top_keyword_count
+    )
 
 if __name__ == "__main__":
     init_db()

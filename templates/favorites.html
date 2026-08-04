@@ -2,6 +2,7 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>즐겨찾기 - NewsHub</title>
 
     <link
@@ -12,11 +13,19 @@
 
 <body>
 
-    <h1>즐겨찾기</h1>
-
-    <p>
-        <a href="{{ url_for('home') }}">← 메인 화면으로 돌아가기</a>
-    </p>
+    <div class="title-row">
+        <h1>즐겨찾기</h1>
+        
+        {% if session.get("username") %}
+            <a href="{{ url_for('profile') }}" class="profile-icon">
+                👤
+            </a>
+        {% else %}
+            <a href="{{ url_for('login') }}" class="profile-icon">
+                👤
+            </a>
+        {% endif %}
+    </div>
 
     <main>
         {% if favorite_news %}
@@ -38,19 +47,26 @@
                         favorite_id=news[0]
                     ) }}"
                 >
-                    <button type="submit" class="delete-button">
-                        즐겨찾기 삭제
+                    <button
+                        type="submit"
+                        class="delete-button"
+                    >
+                        🗑 즐겨찾기 삭제
                     </button>
                 </form>
             </article>
             {% endfor %}
 
         {% else %}
-
             <p>아직 즐겨찾기한 뉴스가 없습니다.</p>
-
         {% endif %}
     </main>
+
+    <footer>
+        <a href="{{ url_for('home') }}">홈</a>
+        <a href="{{ url_for('favorites') }}">즐겨찾기</a>
+        <a href="{{ url_for('interests') }}">추천뉴스</a>
+    </footer>
 
 </body>
 </html>
