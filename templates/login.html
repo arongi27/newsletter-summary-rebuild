@@ -20,15 +20,23 @@
         <h1>로그인</h1>
 
         <p class="login-subtitle">
-            NewsHub에 로그인하여 맞춤 뉴스를 만나보세요.
+            로그인하여 맞춤형 뉴스를 만나보세요.
         </p>
 
-        <form method="POST" action="{{ url_for('login') }}">
+        <form
+            method="POST"
+            action="{{ url_for('login') }}"
+            autocomplete="off"
+        >
 
             <input
                 type="text"
                 name="username"
                 placeholder="아이디"
+                autocomplete="username"
+                spellcheck="false"
+                autocapitalize="off"
+                autocorrect="off"
                 required
             >
 
@@ -36,10 +44,14 @@
                 type="password"
                 name="password"
                 placeholder="비밀번호"
+                autocomplete="current-password"
                 required
             >
 
-            <button type="submit" class="login-button">
+            <button
+                type="submit"
+                class="login-button"
+            >
                 로그인
             </button>
 
