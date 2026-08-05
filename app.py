@@ -313,23 +313,16 @@ def generate_keyword_graph_image(news_list, focus_keyword=""):
         return None
 
     output_filename = "keyword_graph.png"
-
-    output_path = os.path.join(
-        "static",
-        output_filename,
-    )
+    output_path = os.path.join("static", output_filename)
 
     font_path = "C:/Windows/Fonts/malgun.ttf"
-
     font_manager.fontManager.addfont(font_path)
 
     font_name = font_manager.FontProperties(
         fname=font_path,
     ).get_name()
 
-    plt.figure(
-        figsize=(11, 7),
-    )
+    plt.figure(figsize=(14, 8))
 
     normalized_focus = normalize_keyword(focus_keyword)
 
@@ -337,7 +330,7 @@ def generate_keyword_graph_image(news_list, focus_keyword=""):
         positions = nx.spring_layout(
             normalized_graph,
             seed=42,
-            k=1.2,
+            k=0.8,
             pos={normalized_focus: (0, 0)},
             fixed=[normalized_focus],
         )
@@ -345,15 +338,15 @@ def generate_keyword_graph_image(news_list, focus_keyword=""):
         positions = nx.spring_layout(
             normalized_graph,
             seed=42,
-            k=1.2,
+            k=0.8,
         )
-        
+
+    # 등장 횟수와 글자 수를 함께 반영해
+    # 긴 키워드도 원 안에서 잘 보이도록 한다.
     node_sizes = [
-        700
-        + normalized_graph.nodes[node].get(
-            "count",
-            1,
-        ) * 170
+        900
+        + normalized_graph.nodes[node].get("count", 1) * 160
+        + min(len(node), 8) * 110
         for node in normalized_graph.nodes
     ]
 
@@ -363,8 +356,7 @@ def generate_keyword_graph_image(news_list, focus_keyword=""):
             "weight",
             1,
         ) * 0.8
-        for first_word, second_word
-        in normalized_graph.edges
+        for first_word, second_word in normalized_graph.edges
     ]
 
     node_colors = [
@@ -372,7 +364,7 @@ def generate_keyword_graph_image(news_list, focus_keyword=""):
         if node == normalized_focus
         else "#a9d8ef"
         for node in normalized_graph.nodes
-        ]
+    ]
 
     node_borders = [
         2.8
@@ -403,23 +395,26 @@ def generate_keyword_graph_image(news_list, focus_keyword=""):
         normalized_graph,
         positions,
         font_family=font_name,
-        font_size=11,
+        font_size=10,
         font_color="#123b63",
     )
 
     plt.axis("off")
+    plt.margins(0.08)
     plt.tight_layout()
 
     plt.savefig(
         output_path,
-        dpi=150,
+        dpi=180,
         bbox_inches="tight",
+        pad_inches=0.15,
         facecolor="white",
     )
 
     plt.close()
 
     return output_filename
+
 
 def generate_wordcloud(news_list):
     keyword_counts = extract_keywords(news_list)
