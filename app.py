@@ -19,6 +19,13 @@ import os
 import re
 import sqlite3
 import requests
+import networkx as nx
+import matplotlib
+
+matplotlib.use("Agg")
+
+import matplotlib.pyplot as plt
+from matplotlib import font_manager
 
 load_dotenv()
 
@@ -109,30 +116,64 @@ def fetch_naver_news(query, display=10, sort="date"):
         print(f"네이버 뉴스 API 응답 처리 오류: {error}")
         return []
 
-def extract_keywords(news_list):
-    text_parts = []
+def normalize_keyword(word):
+    normalized = str(word)
 
-    for news in news_list:
-        text_parts.append(news["title"])
-        text_parts.append(news["content"])
+    normalized = re.sub(
+        r"[^가-힣a-zA-Z0-9]",
+        "",
+        normalized,
+    )
 
-    full_text = " ".join(text_parts)
+    return normalized
 
-    stopwords = {
+def get_stopwords():
+    """워드클라우드와 관계도에서 제외할 일반적인 단어 목록을 반환한다."""
+
+    return {
+                # 기본 불용어
         "기자", "뉴스", "오늘", "관련", "통해",
         "대한", "이번", "지난", "위해", "가운데",
         "따르면", "대해", "이날", "최대", "최근",
         "전국", "프로젝트", "명칭", "발표", "진행",
+
+        # 일반 명사
         "정부", "기업", "시장", "산업", "분야",
+        "경제", "지역", "사업", "교육", "지원",
+        "계획", "시스템", "센터", "데이터", "기술",
+        "국내", "업종", "자산", "운용", "참여",
+
+        # 기사에서 자주 등장하지만 의미가 약한 단어
+        "상승", "하락", "강세", "약세",
+        "증가", "감소", "확대", "축소",
+        "개최", "운영", "추진", "제공",
+        "설명", "예정", "발생", "가능",
+        "이용", "활용", "구축", "도입",
+        "관계자", "대표", "업계", "모든",
+        "모두", "이상", "이하", "경우",
+
+         # 실적 기사에서 자주 나오는 단어
+        "분기", "상반기", "하반기",
+        "전년", "대비", "이익",
+        "영업", "실적",
+
+        # 지역/기관명(관계도 품질 향상용)
+        "서울", "경기", "인천", "부산",
+        "대구", "광주", "대전", "울산",
     }
 
+
+def extract_keywords_from_text(text):
+    """한 문장에서 명사형 핵심 키워드만 추출한다."""
+
+    stopwords = get_stopwords()
     keywords = []
 
-    for token in kiwi.tokenize(full_text):
+    for token in kiwi.tokenize(text or ""):
         if not token.tag.startswith("N"):
             continue
 
-        word = token.form.strip()
+        word = normalize_keyword(token.form)
 
         if len(word) < 2:
             continue
@@ -145,7 +186,240 @@ def extract_keywords(news_list):
 
         keywords.append(word)
 
-    return Counter(keywords)
+    return keywords
+
+
+def extract_keywords(news_list):
+    """현재 뉴스 목록 전체의 키워드 등장 횟수를 계산한다."""
+
+    text_parts = []
+
+    for news in news_list:
+        text_parts.append(news.get("title", ""))
+        text_parts.append(news.get("content", ""))
+
+    full_text = " ".join(text_parts)
+    return Counter(extract_keywords_from_text(full_text))
+
+def build_keyword_graph(news_list, max_keywords=10):
+    overall_counts = extract_keywords(news_list)
+
+    top_keywords = {
+        normalize_keyword(word)
+        for word, _ in overall_counts.most_common(max_keywords)
+    }
+
+    graph = nx.Graph()
+
+    for word in top_keywords:
+        graph.add_node(
+            word,
+            count=overall_counts[word],
+        )
+
+    for news in news_list:
+        article_text = (
+            news["title"] + " " + news["content"]
+        )
+
+        article_keywords = set()
+
+        for token in kiwi.tokenize(article_text):
+            if not token.tag.startswith("N"):
+                continue
+
+            word = normalize_keyword(token.form)
+
+            if word in top_keywords:
+                article_keywords.add(word)
+
+        article_keywords = sorted(article_keywords)
+
+        for index, first_word in enumerate(article_keywords):
+            for second_word in article_keywords[index + 1:]:
+                if graph.has_edge(first_word, second_word):
+                    graph[first_word][second_word]["weight"] += 1
+                else:
+                    graph.add_edge(
+                        first_word,
+                        second_word,
+                        weight=1,
+                    )
+
+    return graph
+
+def generate_keyword_graph_image(news_list, focus_keyword=""):
+    graph = build_keyword_graph(
+        news_list,
+        max_keywords=10,
+    )
+
+    if graph.number_of_nodes() == 0:
+        return None
+
+    # 혹시 남아 있는 공백이나 특수문자를
+    # 이미지 생성 직전에 한 번 더 정리한다.
+    normalized_graph = nx.Graph()
+
+    for node, data in graph.nodes(data=True):
+        normalized_node = normalize_keyword(node)
+
+        if not normalized_node:
+            continue
+
+        current_count = normalized_graph.nodes.get(
+            normalized_node,
+            {},
+        ).get("count", 0)
+
+        normalized_graph.add_node(
+            normalized_node,
+            count=max(
+                current_count,
+                data.get("count", 1),
+            ),
+        )
+
+    for first_word, second_word, data in graph.edges(data=True):
+        normalized_first = normalize_keyword(first_word)
+        normalized_second = normalize_keyword(second_word)
+
+        if (
+            not normalized_first
+            or not normalized_second
+            or normalized_first == normalized_second
+        ):
+            continue
+
+        edge_weight = data.get("weight", 1)
+
+        if normalized_graph.has_edge(
+            normalized_first,
+            normalized_second,
+        ):
+            normalized_graph[
+                normalized_first
+            ][
+                normalized_second
+            ]["weight"] += edge_weight
+        else:
+            normalized_graph.add_edge(
+                normalized_first,
+                normalized_second,
+                weight=edge_weight,
+            )
+
+    if normalized_graph.number_of_nodes() == 0:
+        return None
+
+    output_filename = "keyword_graph.png"
+
+    output_path = os.path.join(
+        "static",
+        output_filename,
+    )
+
+    font_path = "C:/Windows/Fonts/malgun.ttf"
+
+    font_manager.fontManager.addfont(font_path)
+
+    font_name = font_manager.FontProperties(
+        fname=font_path,
+    ).get_name()
+
+    plt.figure(
+        figsize=(11, 7),
+    )
+
+    normalized_focus = normalize_keyword(focus_keyword)
+
+    if normalized_focus in normalized_graph:
+        positions = nx.spring_layout(
+            normalized_graph,
+            seed=42,
+            k=1.2,
+            pos={normalized_focus: (0, 0)},
+            fixed=[normalized_focus],
+        )
+    else:
+        positions = nx.spring_layout(
+            normalized_graph,
+            seed=42,
+            k=1.2,
+        )
+        
+    node_sizes = [
+        700
+        + normalized_graph.nodes[node].get(
+            "count",
+            1,
+        ) * 170
+        for node in normalized_graph.nodes
+    ]
+
+    edge_widths = [
+        0.8
+        + normalized_graph[first_word][second_word].get(
+            "weight",
+            1,
+        ) * 0.8
+        for first_word, second_word
+        in normalized_graph.edges
+    ]
+
+    node_colors = [
+        "#4fa8dc"
+        if node == normalized_focus
+        else "#a9d8ef"
+        for node in normalized_graph.nodes
+        ]
+
+    node_borders = [
+        2.8
+        if node == normalized_focus
+        else 1.4
+        for node in normalized_graph.nodes
+    ]
+
+    nx.draw_networkx_nodes(
+        normalized_graph,
+        positions,
+        node_size=node_sizes,
+        node_color=node_colors,
+        edgecolors="#438fbd",
+        linewidths=node_borders,
+        alpha=0.95,
+    )
+
+    nx.draw_networkx_edges(
+        normalized_graph,
+        positions,
+        width=edge_widths,
+        edge_color="#a8bfd3",
+        alpha=0.7,
+    )
+
+    nx.draw_networkx_labels(
+        normalized_graph,
+        positions,
+        font_family=font_name,
+        font_size=11,
+        font_color="#123b63",
+    )
+
+    plt.axis("off")
+    plt.tight_layout()
+
+    plt.savefig(
+        output_path,
+        dpi=150,
+        bbox_inches="tight",
+        facecolor="white",
+    )
+
+    plt.close()
+
+    return output_filename
 
 def generate_wordcloud(news_list):
     keyword_counts = extract_keywords(news_list)
@@ -444,6 +718,11 @@ def home():
 
     wordcloud_filename = generate_wordcloud(filtered_news)
 
+    keyword_graph = generate_keyword_graph_image(
+        filtered_news,
+        focus_keyword=api_query,
+    )
+
     connection = sqlite3.connect("news.db")
 
     popular_keywords = connection.execute(
@@ -464,6 +743,7 @@ def home():
         category=category,
         popular_keywords=popular_keywords,
         wordcloud_filename=wordcloud_filename,
+        keyword_graph=keyword_graph,
     )
 
 @app.route("/autocomplete")

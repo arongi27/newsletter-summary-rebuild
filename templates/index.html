@@ -100,6 +100,22 @@
         </section>
         {% endif %}
 
+        {% if keyword_graph %}
+        <section class="visualization-box">
+            <h2>🕸 뉴스 관계도</h2>
+
+            <p>
+                같은 기사에서 함께 등장한 핵심 키워드의 연결 관계입니다.
+            </p>
+
+            <img
+                src="{{ url_for('static', filename=keyword_graph) }}"
+                alt="뉴스 관계도"
+                class="keyword-graph-image"
+            >
+        </section>
+        {% endif %}
+
         <h2>
             {% if query %}
                 '{{ query }}' 검색 결과

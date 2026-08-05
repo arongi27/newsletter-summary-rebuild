@@ -668,3 +668,10 @@ footer a:hover {
     width: 100%;
     border-radius: 12px;
 }
+
+.keyword-graph-image {
+    display: block;
+    width: 100%;
+    height: auto;
+    border-radius: 16px;
+}
