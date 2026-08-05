@@ -6,19 +6,23 @@ from flask import (
     url_for,
     session,
 )
+
 from werkzeug.security import generate_password_hash, check_password_hash
 from dotenv import load_dotenv
-
 from urllib.parse import urlparse
+from collections import Counter
+from wordcloud import WordCloud
+from kiwipiepy import Kiwi
+
 import html
 import os
 import re
 import sqlite3
-
 import requests
 
-
 load_dotenv()
+
+kiwi = Kiwi()
 
 NAVER_CLIENT_ID = os.getenv("NAVER_CLIENT_ID")
 NAVER_CLIENT_SECRET = os.getenv("NAVER_CLIENT_SECRET")
@@ -58,7 +62,6 @@ def get_news_source(link):
         return hostname.replace("www.", "")
     except ValueError:
         return "네이버 뉴스"
-
 
 def fetch_naver_news(query, display=10, sort="date"):
     """네이버 뉴스 검색 API에서 뉴스 목록을 가져온다."""
@@ -101,10 +104,72 @@ def fetch_naver_news(query, display=10, sort="date"):
     except requests.RequestException as error:
         print(f"네이버 뉴스 API 요청 오류: {error}")
         return []
+
     except ValueError as error:
         print(f"네이버 뉴스 API 응답 처리 오류: {error}")
         return []
 
+def extract_keywords(news_list):
+    text_parts = []
+
+    for news in news_list:
+        text_parts.append(news["title"])
+        text_parts.append(news["content"])
+
+    full_text = " ".join(text_parts)
+
+    stopwords = {
+        "기자", "뉴스", "오늘", "관련", "통해",
+        "대한", "이번", "지난", "위해", "가운데",
+        "따르면", "대해", "이날", "최대", "최근",
+        "전국", "프로젝트", "명칭", "발표", "진행",
+        "정부", "기업", "시장", "산업", "분야",
+    }
+
+    keywords = []
+
+    for token in kiwi.tokenize(full_text):
+        if not token.tag.startswith("N"):
+            continue
+
+        word = token.form.strip()
+
+        if len(word) < 2:
+            continue
+
+        if word in stopwords:
+            continue
+
+        if word.isdigit():
+            continue
+
+        keywords.append(word)
+
+    return Counter(keywords)
+
+def generate_wordcloud(news_list):
+    keyword_counts = extract_keywords(news_list)
+
+    if not keyword_counts:
+        return None
+
+    output_path = os.path.join(
+        "static",
+        "wordcloud.png",
+    )
+
+    wordcloud = WordCloud(
+        font_path="C:/Windows/Fonts/malgun.ttf",
+        width=900,
+        height=450,
+        background_color="white",
+        max_words=50,
+        colormap="Blues",
+    ).generate_from_frequencies(keyword_counts)
+
+    wordcloud.to_file(output_path)
+
+    return "wordcloud.png"
 
 def convert_api_news(api_items):
     """네이버 API 응답을 템플릿에서 사용하는 형식으로 변환한다."""
@@ -377,6 +442,8 @@ def home():
 
     filtered_news = convert_api_news(api_items)
 
+    wordcloud_filename = generate_wordcloud(filtered_news)
+
     connection = sqlite3.connect("news.db")
 
     popular_keywords = connection.execute(
@@ -396,6 +463,7 @@ def home():
         query=query,
         category=category,
         popular_keywords=popular_keywords,
+        wordcloud_filename=wordcloud_filename,
     )
 
 @app.route("/autocomplete")
