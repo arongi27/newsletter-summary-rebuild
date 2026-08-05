@@ -2,7 +2,12 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
     <title>추천뉴스 - NewsHub</title>
 
     <link
@@ -17,11 +22,19 @@
         <h1>추천뉴스</h1>
 
         {% if session.get("username") %}
-            <a href="{{ url_for('profile') }}" class="profile-icon">
+            <a
+                href="{{ url_for('profile') }}"
+                class="profile-icon"
+                aria-label="프로필"
+            >
                 👤
             </a>
         {% else %}
-            <a href="{{ url_for('login') }}" class="profile-icon">
+            <a
+                href="{{ url_for('login') }}"
+                class="profile-icon"
+                aria-label="로그인"
+            >
                 👤
             </a>
         {% endif %}
@@ -29,21 +42,38 @@
 
     <main>
 
-        <section class="interest-section">
+        <section class="interest-analysis">
             <h2>내 주요 관심 키워드</h2>
 
-            {% if keywords %}
-                <div class="keyword-list">
-                    {% for keyword, count in keywords %}
+            {% if interest_bars %}
+                <p class="interest-description">
+                    최근 검색 기록을 기반으로 분석한
+                    관심 키워드입니다.
+                </p>
+
+                <div class="interest-bar-list">
+                    {% for item in interest_bars %}
                     <a
-                        class="keyword-tag"
-                        href="{{ url_for('home', q=keyword) }}"
+                        class="interest-bar-item"
+                        href="{{ url_for(
+                            'home',
+                            q=item.keyword
+                        ) }}"
                     >
-                        {{ keyword }}
-                        <span>{{ count }}회</span>
+                        <div class="interest-bar-label">
+                            {{ item.keyword }}
+                        </div>
+
+                        <div class="interest-bar-track">
+                            <div
+                                class="interest-bar-fill"
+                                data-percentage="{{ item.percentage }}"
+                            ></div>
+                        </div>
                     </a>
                     {% endfor %}
                 </div>
+
             {% else %}
                 <p>
                     아직 분석할 검색 기록이 없습니다.
@@ -57,7 +87,15 @@
         {% if recommended_news %}
             {% for news in recommended_news %}
             <article>
-                <h3>{{ news.title }}</h3>
+                <h3>
+                    <a
+                        href="{{ news.link }}"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                    >
+                        {{ news.title }}
+                    </a>
+                </h3>
 
                 <small>
                     {{ news.date }} | {{ news.source }}
@@ -72,6 +110,36 @@
                         news_id=news.id
                     ) }}"
                 >
+                    <input
+                        type="hidden"
+                        name="news_title"
+                        value="{{ news.title }}"
+                    >
+
+                    <input
+                        type="hidden"
+                        name="news_content"
+                        value="{{ news.content }}"
+                    >
+
+                    <input
+                        type="hidden"
+                        name="news_date"
+                        value="{{ news.date }}"
+                    >
+
+                    <input
+                        type="hidden"
+                        name="news_source"
+                        value="{{ news.source }}"
+                    >
+
+                    <input
+                        type="hidden"
+                        name="news_link"
+                        value="{{ news.link }}"
+                    >
+
                     <button
                         type="submit"
                         class="favorite-button"
@@ -91,10 +159,39 @@
     </main>
 
     <footer>
-        <a href="{{ url_for('home') }}">홈</a>
-        <a href="{{ url_for('favorites') }}">즐겨찾기</a>
-        <a href="{{ url_for('interests') }}">추천뉴스</a>
+        <a href="{{ url_for('home') }}">
+            홈
+        </a>
+
+        <a href="{{ url_for('favorites') }}">
+            즐겨찾기
+        </a>
+
+        <a href="{{ url_for('interests') }}">
+            추천뉴스
+        </a>
     </footer>
+
+    <script>
+        document
+            .querySelectorAll(".interest-bar-fill")
+            .forEach((bar) => {
+                const percentage = Number(
+                    bar.dataset.percentage
+                );
+
+                if (!Number.isFinite(percentage)) {
+                    return;
+                }
+
+                const safePercentage = Math.min(
+                    Math.max(percentage, 0),
+                    100
+                );
+
+                bar.style.width = `${safePercentage}%`;
+            });
+    </script>
 
 </body>
 </html>

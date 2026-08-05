@@ -1023,6 +1023,21 @@ def interests():
 
     connection.close()
 
+    if keywords:
+        max_count = keywords[0][1]
+
+        interest_bars = [
+            {
+                "keyword": keyword,
+                "percentage": round(
+                    count / max_count * 100
+                ),
+            }
+            for keyword, count in keywords
+        ]
+    else:
+        interest_bars = []
+    
     recommended_news = []
     saved_links = set()
 
@@ -1057,9 +1072,9 @@ def interests():
     return render_template(
         "interests.html",
         keywords=keywords,
+        interest_bars=interest_bars,
         recommended_news=recommended_news,
     )
-
 
 @app.route("/profile")
 def profile():
