@@ -11,25 +11,21 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from dotenv import load_dotenv
 from urllib.parse import urlparse
 from collections import Counter
-from wordcloud import WordCloud
-from kiwipiepy import Kiwi
 
 import html
 import os
 import re
 import sqlite3
 import requests
-import networkx as nx
-import matplotlib
-
-matplotlib.use("Agg")
-
-import matplotlib.pyplot as plt
-from matplotlib import font_manager
 
 load_dotenv()
 
-kiwi = Kiwi()
+kiwi = None
+IS_RENDER = bool(os.getenv("RENDER"))
+ENABLE_VISUALIZATIONS = os.getenv(
+    "ENABLE_VISUALIZATIONS",
+    "false" if IS_RENDER else "true",
+).lower() == "true"
 
 NAVER_CLIENT_ID = os.getenv("NAVER_CLIENT_ID")
 NAVER_CLIENT_SECRET = os.getenv("NAVER_CLIENT_SECRET")
@@ -163,13 +159,26 @@ def get_stopwords():
     }
 
 
+def get_kiwi():
+    """형태소 분석기는 실제로 필요할 때 한 번만 생성한다."""
+
+    global kiwi
+
+    if kiwi is None:
+        from kiwipiepy import Kiwi
+
+        kiwi = Kiwi()
+
+    return kiwi
+
+
 def extract_keywords_from_text(text):
     """한 문장에서 명사형 핵심 키워드만 추출한다."""
 
     stopwords = get_stopwords()
     keywords = []
 
-    for token in kiwi.tokenize(text or ""):
+    for token in get_kiwi().tokenize(text or ""):
         if not token.tag.startswith("N"):
             continue
 
@@ -202,6 +211,8 @@ def extract_keywords(news_list):
     return Counter(extract_keywords_from_text(full_text))
 
 def build_keyword_graph(news_list, max_keywords=10):
+    import networkx as nx
+
     overall_counts = extract_keywords(news_list)
 
     top_keywords = {
@@ -224,7 +235,7 @@ def build_keyword_graph(news_list, max_keywords=10):
 
         article_keywords = set()
 
-        for token in kiwi.tokenize(article_text):
+        for token in get_kiwi().tokenize(article_text):
             if not token.tag.startswith("N"):
                 continue
 
@@ -249,6 +260,14 @@ def build_keyword_graph(news_list, max_keywords=10):
     return graph
 
 def generate_keyword_graph_image(news_list, focus_keyword=""):
+    import networkx as nx
+    import matplotlib
+
+    matplotlib.use("Agg")
+
+    import matplotlib.pyplot as plt
+    from matplotlib import font_manager
+
     graph = build_keyword_graph(
         news_list,
         max_keywords=10,
@@ -315,12 +334,24 @@ def generate_keyword_graph_image(news_list, focus_keyword=""):
     output_filename = "keyword_graph.png"
     output_path = os.path.join("static", output_filename)
 
-    font_path = "C:/Windows/Fonts/malgun.ttf"
-    font_manager.fontManager.addfont(font_path)
+    font_candidates = [
+        "C:/Windows/Fonts/malgun.ttf",
+        "/usr/share/fonts/truetype/nanum/NanumGothic.ttf",
+        "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
+    ]
 
-    font_name = font_manager.FontProperties(
-        fname=font_path,
-    ).get_name()
+    font_path = next(
+        (path for path in font_candidates if os.path.exists(path)),
+        None,
+    )
+
+    if font_path:
+        font_manager.fontManager.addfont(font_path)
+        font_name = font_manager.FontProperties(
+            fname=font_path,
+        ).get_name()
+    else:
+        font_name = "DejaVu Sans"
 
     plt.figure(figsize=(14, 8))
 
@@ -417,6 +448,8 @@ def generate_keyword_graph_image(news_list, focus_keyword=""):
 
 
 def generate_wordcloud(news_list):
+    from wordcloud import WordCloud
+
     keyword_counts = extract_keywords(news_list)
 
     if not keyword_counts:
@@ -427,8 +460,19 @@ def generate_wordcloud(news_list):
         "wordcloud.png",
     )
 
+    font_candidates = [
+        "C:/Windows/Fonts/malgun.ttf",
+        "/usr/share/fonts/truetype/nanum/NanumGothic.ttf",
+        "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
+    ]
+
+    font_path = next(
+        (path for path in font_candidates if os.path.exists(path)),
+        None,
+    )
+
     wordcloud = WordCloud(
-        font_path="C:/Windows/Fonts/malgun.ttf",
+        font_path=font_path,
         width=900,
         height=450,
         background_color="white",
@@ -711,12 +755,15 @@ def home():
 
     filtered_news = convert_api_news(api_items)
 
-    wordcloud_filename = generate_wordcloud(filtered_news)
-
-    keyword_graph = generate_keyword_graph_image(
-        filtered_news,
-        focus_keyword=api_query,
-    )
+    if ENABLE_VISUALIZATIONS:
+        wordcloud_filename = generate_wordcloud(filtered_news)
+        keyword_graph = generate_keyword_graph_image(
+            filtered_news,
+            focus_keyword=api_query,
+        )
+    else:
+        wordcloud_filename = None
+        keyword_graph = None
 
     connection = sqlite3.connect("news.db")
 
