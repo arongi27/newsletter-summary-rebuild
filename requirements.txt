@@ -1,0 +1,8 @@
+Flask
+Werkzeug
+requests
+python-dotenv
+wordcloud
+networkx
+matplotlib
+kiwipiepy

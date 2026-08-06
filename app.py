@@ -344,9 +344,9 @@ def generate_keyword_graph_image(news_list, focus_keyword=""):
     # 등장 횟수와 글자 수를 함께 반영해
     # 긴 키워드도 원 안에서 잘 보이도록 한다.
     node_sizes = [
-        900
-        + normalized_graph.nodes[node].get("count", 1) * 160
-        + min(len(node), 8) * 110
+        1400
+        + normalized_graph.nodes[node].get("count", 1) * 220
+        + min(len(node), 8) * 160
         for node in normalized_graph.nodes
     ]
 
@@ -395,7 +395,7 @@ def generate_keyword_graph_image(news_list, focus_keyword=""):
         normalized_graph,
         positions,
         font_family=font_name,
-        font_size=10,
+        font_size=13,
         font_color="#123b63",
     )
 
