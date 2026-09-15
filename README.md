@@ -362,7 +362,3 @@ python benchmark_search.py --seed 100000   # 더미 기사 10만 건 생성
 python benchmark_search.py --run 반도체     # before/after 실행계획·시간 비교
 python benchmark_search.py --cleanup       # 더미 데이터 삭제
 ```
-
-## 9. 화면 캡처
-
-(추가 예정)
