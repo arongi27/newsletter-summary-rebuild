@@ -5,17 +5,16 @@
 body {
     min-height: 100vh;
     margin: 0;
-    padding: 24px 20px 90px;
+    padding: 30px 24px 100px;
     background-color: #eaf6fb;
     color: #173b63;
     font-family: Arial, sans-serif;
-    font-size: 14px;
 }
 
 /* 제목과 설명 */
 
 h1 {
-    margin: 30px 0 8px;
+    margin: 40px 0 10px;
     text-align: center;
     color: #173b63;
 }
@@ -34,52 +33,36 @@ p {
 
 .title-row {
     position: relative;
-    width: min(92%, 900px);
-    height: 48px;
-    margin: 28px auto 8px;
+    width: min(92%, 980px);
+    height: 50px;
+    margin: 40px auto 10px;
 }
 
 .title-row h1 {
     margin: 0;
-    line-height: 48px;
+    line-height: 50px;
     text-align: center;
-}
-
-.title-row h1 {
-    font-size: 30px;
-}
-
-main > h2 {
-    font-size: 22px;
-}
-
-article h3 {
-    font-size: 16px;
-}
-
-article p {
-    font-size: 14px;
 }
 
 .title-row .profile-icon {
     position: absolute;
     top: 50%;
-    left: calc(50% + 385px);
+    left: calc(50% + 420px);
     transform: translateY(-45%);
 
     display: flex;
     justify-content: center;
     align-items: center;
 
-    width: 40px;
-    height: 40px;
+    width: 42px;
+    height: 42px;
 
     border-radius: 50%;
     background-color: #55a9df;
     color: #ffffff;
 
     text-decoration: none;
-    font-size: 18px;
+    font-size: 19px;
     font-weight: normal;
     cursor: pointer;
 }
@@ -108,7 +91,7 @@ button:hover {
 .search-area {
     position: relative;
     width: 100%;
-    margin: 16px auto 20px;
+    margin: 20px auto 24px;
 }
 
 /*
@@ -117,7 +100,7 @@ button:hover {
 */
 .search-area form {
     display: grid;
-    grid-template-columns: 56px 380px 72px;
+    grid-template-columns: 72px 420px 78px;
     justify-content: center;
     align-items: center;
     gap: 10px;
@@ -125,12 +108,12 @@ button:hover {
 
 #search-input {
     grid-column: 2;
-    width: 380px;
-    height: 48px;
-    padding: 0 18px;
-    font-size: 15px;
+    width: 420px;
+    height: 54px;
+    padding: 0 20px;
+    font-size: 16px;
     border: 1px solid #c8d7e4;
-    border-radius: 24px;
+    border-radius: 28px;
     background-color: #ffffff;
     outline: none;
 }
@@ -142,12 +125,12 @@ button:hover {
 
 #search-form button {
     grid-column: 3;
-    width: 72px;
-    height: 48px;
+    width: 78px;
+    height: 54px;
     padding: 0;
-    font-size: 14px;
+    font-size: 15px;
     font-weight: bold;
-    border-radius: 24px;
+    border-radius: 28px;
 }
 
 #search-form button:hover {
@@ -161,7 +144,7 @@ button:hover {
     z-index: 20;
     top: calc(100% + 6px);
     left: 50%;
-    width: 380px;
+    width: 420px;
     margin: 0;
     padding: 0;
     overflow: hidden;
@@ -191,9 +174,9 @@ button:hover {
 /* 인기 검색어 */
 
 .popular-box {
-    width: min(92%, 900px);
-    margin: 20px auto;
-    padding: 14px 20px;
+    width: min(92%, 980px);
+    margin: 24px auto;
+    padding: 16px 22px;
     background-color: #ffffff;
     border: 1px solid #dce8f2;
     border-radius: 14px;
@@ -236,8 +219,8 @@ button:hover {
 nav {
     display: grid;
     grid-template-columns: repeat(6, 1fr);
-    width: min(92%, 900px);
-    margin: 18px auto 28px;
+    width: min(92%, 980px);
+    margin: 20px auto 34px;
     padding: 0;
     overflow: hidden;
     background-color: #ffffff;
@@ -250,8 +233,8 @@ nav a {
     display: flex;
     justify-content: center;
     align-items: center;
-    min-height: 50px;
-    padding: 14px 10px;
+    min-height: 56px;
+    padding: 16px 12px;
     border-right: 1px solid #dce8f2;
     background-color: transparent;
     color: #173b63;
@@ -272,20 +255,20 @@ nav a:hover {
 /* 뉴스 영역 */
 
 main {
-    width: min(92%, 900px);
-    margin: 28px auto 90px;
+    width: min(92%, 980px);
+    margin: 34px auto 100px;
     padding: 0;
 }
 
 main h2 {
-    margin-bottom: 16px;
+    margin-bottom: 20px;
     color: #173b63;
 }
 
 article {
     width: 100%;
-    margin-bottom: 16px;
-    padding: 20px 24px;
+    margin-bottom: 20px;
+    padding: 24px 28px;
     background-color: #ffffff;
     border: 1px solid #dce8f2;
     border-radius: 16px;
@@ -605,7 +588,7 @@ footer a:hover {
     }
 
     article {
-        padding: 18px;
+        padding: 20px;
     }
 
     .login-card {
@@ -666,7 +649,7 @@ footer a:hover {
 
 .visualization-box {
     margin: 30px 0;
-    padding: 18px;
+    padding: 20px;
     background: #ffffff;
     border-radius: 15px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
@@ -682,20 +665,14 @@ footer a:hover {
 }
 
 .wordcloud-image {
-    display: block;
     width: 100%;
-    max-width: 840px;
-    height: auto;
-    margin: 0 auto;
     border-radius: 12px;
 }
 
 .keyword-graph-image {
     display: block;
     width: 100%;
-    max-width: 840px;
     height: auto;
-    margin: 0 auto;
     border-radius: 16px;
 }
 
@@ -714,7 +691,7 @@ footer a:hover {
 }
 
 .interest-description {
-    margin-bottom: 16px;
+    margin-bottom: 20px;
     color: #6b7280;
     font-size: 14px;
     line-height: 1.6;
@@ -768,7 +745,7 @@ footer a:hover {
 
 @media (max-width: 600px) {
     .interest-analysis {
-        padding: 18px;
+        padding: 20px;
     }
 
     .interest-bar-item {
