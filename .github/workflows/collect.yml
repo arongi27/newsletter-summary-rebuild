@@ -1,0 +1,35 @@
+name: Collect news
+
+# Render 무료 플랜에는 Cron Job/Background Worker가 없어서(둘 다 유료),
+# 배치 수집기(collector.py)는 대신 GitHub Actions의 스케줄 실행으로
+# 돌린다. 웹 서비스(Render)와 완전히 분리되어 있어서, 웹 서비스가
+# 슬립 상태여도 수집은 그대로 진행된다.
+
+on:
+  schedule:
+    - cron: "0 * * * *" # 매시 정각(UTC 기준)
+  workflow_dispatch: {} # Actions 탭에서 수동 실행 버튼
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      # collector.py는 웹 서버(Flask, kiwipiepy, matplotlib 등)와
+      # 의존성을 공유하지 않는다. 배치 잡 설치 시간을 줄이기 위해
+      # 최소 의존성만 담은 requirements-collector.txt를 따로 쓴다.
+      - name: Install collector dependencies
+        run: pip install -r requirements-collector.txt
+
+      - name: Run collector
+        env:
+          NAVER_CLIENT_ID: ${{ secrets.NAVER_CLIENT_ID }}
+          NAVER_CLIENT_SECRET: ${{ secrets.NAVER_CLIENT_SECRET }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: python collector.py
