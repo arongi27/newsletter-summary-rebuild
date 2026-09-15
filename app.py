@@ -9,14 +9,12 @@ from flask import (
 
 from werkzeug.security import generate_password_hash, check_password_hash
 from dotenv import load_dotenv
-from urllib.parse import urlparse
 from collections import Counter
 
-import html
 import os
 import re
-import sqlite3
-import requests
+
+import db
 
 load_dotenv()
 
@@ -27,8 +25,7 @@ ENABLE_VISUALIZATIONS = os.getenv(
     "false" if IS_RENDER else "true",
 ).lower() == "true"
 
-NAVER_CLIENT_ID = os.getenv("NAVER_CLIENT_ID")
-NAVER_CLIENT_SECRET = os.getenv("NAVER_CLIENT_SECRET")
+ARTICLE_LIST_LIMIT = 10
 
 
 app = Flask(__name__)
@@ -40,77 +37,67 @@ app.secret_key = os.getenv(
 )
 
 
-def clean_api_text(text):
-    """네이버 API 결과에 포함된 HTML 태그와 엔티티를 정리한다."""
+def rows_to_news_list(rows):
+    """articles 테이블 조회 결과를 템플릿에서 쓰는 형식으로 변환한다."""
 
-    if not text:
-        return ""
+    return [
+        {
+            "id": row[0],
+            "title": row[1],
+            "content": row[2],
+            "date": row[3] or "",
+            "source": row[4],
+            "link": row[5],
+        }
+        for row in rows
+    ]
 
-    cleaned_text = re.sub(r"<[^>]+>", "", text)
-    return html.unescape(cleaned_text).strip()
+
+def search_articles(connection, query, limit=ARTICLE_LIST_LIMIT):
+    pattern = f"%{query}%"
+
+    rows = connection.execute(
+        """
+        SELECT id, title, content, published_at, source, link
+        FROM articles
+        WHERE title LIKE ? OR content LIKE ?
+        ORDER BY published_at DESC
+        LIMIT ?
+        """,
+        (pattern, pattern, limit),
+    ).fetchall()
+
+    return rows_to_news_list(rows)
 
 
-def get_news_source(link):
-    """뉴스 원문 주소에서 언론사 도메인을 추출한다."""
+def list_articles_by_category(connection, category, limit=ARTICLE_LIST_LIMIT):
+    rows = connection.execute(
+        """
+        SELECT id, title, content, published_at, source, link
+        FROM articles
+        WHERE category = ?
+        ORDER BY published_at DESC
+        LIMIT ?
+        """,
+        (category, limit),
+    ).fetchall()
 
-    if not link:
-        return "네이버 뉴스"
+    return rows_to_news_list(rows)
 
-    try:
-        hostname = urlparse(link).hostname
 
-        if not hostname:
-            return "네이버 뉴스"
+def list_recent_articles(connection, limit=ARTICLE_LIST_LIMIT):
+    rows = connection.execute(
+        """
+        SELECT id, title, content, published_at, source, link
+        FROM articles
+        ORDER BY published_at DESC
+        LIMIT ?
+        """,
+        (limit,),
+    ).fetchall()
 
-        return hostname.replace("www.", "")
-    except ValueError:
-        return "네이버 뉴스"
+    return rows_to_news_list(rows)
 
-def fetch_naver_news(query, display=10, sort="date"):
-    """네이버 뉴스 검색 API에서 뉴스 목록을 가져온다."""
-
-    if not NAVER_CLIENT_ID or not NAVER_CLIENT_SECRET:
-        print(
-            "NAVER_CLIENT_ID 또는 "
-            "NAVER_CLIENT_SECRET이 설정되지 않았습니다."
-        )
-        return []
-
-    url = "https://naverapihub.apigw.ntruss.com/search/v1/news"
-
-    headers = {
-        "X-NCP-APIGW-API-KEY-ID": NAVER_CLIENT_ID,
-        "X-NCP-APIGW-API-KEY": NAVER_CLIENT_SECRET,
-    }
-
-    params = {
-        "query": query,
-        "display": display,
-        "start": 1,
-        "sort": sort,
-        "format": "json",
-    }
-
-    try:
-        response = requests.get(
-            url,
-            headers=headers,
-            params=params,
-            timeout=10,
-        )
-
-        response.raise_for_status()
-
-        data = response.json()
-        return data.get("items", [])
-
-    except requests.RequestException as error:
-        print(f"네이버 뉴스 API 요청 오류: {error}")
-        return []
-
-    except ValueError as error:
-        print(f"네이버 뉴스 API 응답 처리 오류: {error}")
-        return []
 
 def normalize_keyword(word):
     normalized = str(word)
@@ -484,192 +471,16 @@ def generate_wordcloud(news_list):
 
     return "wordcloud.png"
 
-def convert_api_news(api_items):
-    """네이버 API 응답을 템플릿에서 사용하는 형식으로 변환한다."""
-
-    converted_news = []
-
-    for index, item in enumerate(api_items, start=1):
-        original_link = (
-            item.get("originallink")
-            or item.get("link")
-            or ""
-        )
-
-        converted_news.append(
-            {
-                "id": index,
-                "title": clean_api_text(
-                    item.get("title", "")
-                ),
-                "content": clean_api_text(
-                    item.get("description", "")
-                ),
-                "date": item.get("pubDate", ""),
-                "source": get_news_source(original_link),
-                "link": original_link,
-            }
-        )
-
-    return converted_news
-
-
-def migrate_favorites_table(connection):
-    """
-    기존 즐겨찾기 테이블을 API 뉴스용 구조로 변환한다.
-
-    이전 구조:
-    - news_id 기준 중복 확인
-    - 원문 링크 없음
-
-    새로운 구조:
-    - 원문 링크 저장
-    - 사용자와 원문 링크 기준 중복 방지
-    """
-
-    table = connection.execute(
-        """
-        SELECT sql
-        FROM sqlite_master
-        WHERE type = 'table'
-          AND name = 'favorites'
-        """
-    ).fetchone()
-
-    if not table:
-        connection.execute(
-            """
-            CREATE TABLE favorites (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                username TEXT NOT NULL,
-                news_title TEXT NOT NULL,
-                news_content TEXT NOT NULL,
-                news_date TEXT NOT NULL,
-                news_source TEXT NOT NULL,
-                news_link TEXT NOT NULL,
-                UNIQUE(username, news_link)
-            )
-            """
-        )
-        return
-
-    table_sql = table[0] or ""
-
-    columns = connection.execute(
-        "PRAGMA table_info(favorites)"
-    ).fetchall()
-
-    column_names = {
-        column[1]
-        for column in columns
-    }
-
-    migration_needed = (
-        "news_link" not in column_names
-        or "UNIQUE(username, news_id)" in table_sql
-    )
-
-    if not migration_needed:
-        return
-
-    connection.execute(
-        """
-        CREATE TABLE favorites_new (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT NOT NULL,
-            news_title TEXT NOT NULL,
-            news_content TEXT NOT NULL,
-            news_date TEXT NOT NULL,
-            news_source TEXT NOT NULL,
-            news_link TEXT NOT NULL,
-            UNIQUE(username, news_link)
-        )
-        """
-    )
-
-    # 기존 즐겨찾기 자료도 삭제하지 않고 보존한다.
-    connection.execute(
-        """
-        INSERT OR IGNORE INTO favorites_new (
-            id,
-            username,
-            news_title,
-            news_content,
-            news_date,
-            news_source,
-            news_link
-        )
-        SELECT
-            id,
-            username,
-            news_title,
-            news_content,
-            news_date,
-            news_source,
-            'legacy://favorite/' || id
-        FROM favorites
-        """
-    )
-
-    connection.execute("DROP TABLE favorites")
-
-    connection.execute(
-        """
-        ALTER TABLE favorites_new
-        RENAME TO favorites
-        """
-    )
-
-
-def init_db():
-    connection = sqlite3.connect("news.db")
-
-    connection.execute(
-        """
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT NOT NULL UNIQUE,
-            password TEXT NOT NULL
-        )
-        """
-    )
-
-    connection.execute(
-        """
-        CREATE TABLE IF NOT EXISTS search_keywords (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            keyword TEXT NOT NULL UNIQUE,
-            count INTEGER NOT NULL DEFAULT 1
-        )
-        """
-    )
-
-    migrate_favorites_table(connection)
-
-    connection.execute(
-        """
-        CREATE TABLE IF NOT EXISTS user_search_keywords (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT NOT NULL,
-            keyword TEXT NOT NULL,
-            count INTEGER NOT NULL DEFAULT 1,
-            UNIQUE(username, keyword)
-        )
-        """
-    )
-
-    connection.commit()
-    connection.close()
 
 @app.route("/")
 def home():
     query = request.args.get("q", "").strip()
     category = request.args.get("category", "").strip()
 
+    connection = db.get_connection()
+
     # 검색창에서 직접 검색한 경우에만 검색 기록을 저장한다.
     if query:
-        connection = sqlite3.connect("news.db")
-
         existing_keyword = connection.execute(
             """
             SELECT id
@@ -737,35 +548,25 @@ def home():
                 )
 
         connection.commit()
-        connection.close()
 
-    # 실제 API 검색어 결정
+    # 웹 서버는 외부 API를 호출하지 않고 collector.py가 미리
+    # 적재해 둔 articles 테이블만 조회한다.
     if query:
-        api_query = query
+        filtered_news = search_articles(connection, query)
     elif category:
-        api_query = category
+        filtered_news = list_articles_by_category(connection, category)
     else:
-        api_query = "오늘 뉴스"
-
-    api_items = fetch_naver_news(
-        query=api_query,
-        display=10,
-        sort="date",
-    )
-
-    filtered_news = convert_api_news(api_items)
+        filtered_news = list_recent_articles(connection)
 
     if ENABLE_VISUALIZATIONS:
         wordcloud_filename = generate_wordcloud(filtered_news)
         keyword_graph = generate_keyword_graph_image(
             filtered_news,
-            focus_keyword=api_query,
+            focus_keyword=query or category,
         )
     else:
         wordcloud_filename = None
         keyword_graph = None
-
-    connection = sqlite3.connect("news.db")
 
     popular_keywords = connection.execute(
         """
@@ -795,7 +596,7 @@ def autocomplete():
     if not query:
         return {"keywords": []}
 
-    connection = sqlite3.connect("news.db")
+    connection = db.get_connection()
 
     keywords = connection.execute(
         """
@@ -829,7 +630,7 @@ def signup():
 
         hashed_password = generate_password_hash(password)
 
-        connection = sqlite3.connect("news.db")
+        connection = db.get_connection()
 
         existing_user = connection.execute(
             """
@@ -869,7 +670,7 @@ def login():
         username = request.form["username"].strip()
         password = request.form["password"]
 
-        connection = sqlite3.connect("news.db")
+        connection = db.get_connection()
 
         user = connection.execute(
             """
@@ -938,7 +739,7 @@ def add_favorite(news_id):
     if not news_title or not news_link:
         return "즐겨찾기할 뉴스 정보가 없습니다.", 400
 
-    connection = sqlite3.connect("news.db")
+    connection = db.get_connection()
 
     existing_favorite = connection.execute(
         """
@@ -990,7 +791,7 @@ def favorites():
     if not username:
         return redirect(url_for("login"))
 
-    connection = sqlite3.connect("news.db")
+    connection = db.get_connection()
 
     favorite_news = connection.execute(
         """
@@ -1026,7 +827,7 @@ def delete_favorite(favorite_id):
     if not username:
         return redirect(url_for("login"))
 
-    connection = sqlite3.connect("news.db")
+    connection = db.get_connection()
 
     connection.execute(
         """
@@ -1050,7 +851,7 @@ def interests():
     if not username:
         return redirect(url_for("login"))
 
-    connection = sqlite3.connect("news.db")
+    connection = db.get_connection()
 
     keywords = connection.execute(
         """
@@ -1062,8 +863,6 @@ def interests():
         """,
         (username,),
     ).fetchall()
-
-    connection.close()
 
     if keywords:
         max_count = keywords[0][1]
@@ -1079,21 +878,13 @@ def interests():
         ]
     else:
         interest_bars = []
-    
+
     recommended_news = []
     saved_links = set()
 
-    # 상위 검색어별로 실제 뉴스를 가져와 추천한다.
+    # 상위 검색어별로 DB에 이미 수집된 기사 중에서 추천한다.
     for keyword, count in keywords:
-        api_items = fetch_naver_news(
-            query=keyword,
-            display=5,
-            sort="date",
-        )
-
-        converted_items = convert_api_news(api_items)
-
-        for news in converted_items:
+        for news in search_articles(connection, keyword, limit=5):
             news_link = news.get("link", "")
 
             if not news_link:
@@ -1111,6 +902,8 @@ def interests():
         if len(recommended_news) >= 10:
             break
 
+    connection.close()
+
     return render_template(
         "interests.html",
         keywords=keywords,
@@ -1125,7 +918,7 @@ def profile():
     if not username:
         return redirect(url_for("login"))
 
-    connection = sqlite3.connect("news.db")
+    connection = db.get_connection()
 
     favorite_count = connection.execute(
         """
@@ -1179,5 +972,5 @@ def profile():
 
 
 if __name__ == "__main__":
-    init_db()
+    db.init_db()
     app.run(debug=True)
