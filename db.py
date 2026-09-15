@@ -7,6 +7,7 @@ app.py(웹 서버)와 collector.py(배치 수집기)가 DATABASE_URL 하나로
 import os
 
 import psycopg2
+import psycopg2.extras
 import psycopg2.pool
 from dotenv import load_dotenv
 
@@ -38,6 +39,22 @@ class PooledConnection:
     def execute(self, query, params=None):
         cursor = self._raw.cursor()
         cursor.execute(query, params or ())
+        return cursor
+
+    def executemany(self, query, params_list):
+        cursor = self._raw.cursor()
+        cursor.executemany(query, params_list)
+        return cursor
+
+    def execute_values(self, query, values, page_size=1000):
+        """대량 삽입 전용. executemany는 행마다 왕복(round trip)이
+        발생해 느리지만, 이 메서드는 여러 행을 한 번의 INSERT 문으로
+        묶어 보낸다(query에는 "VALUES %s" 형태의 자리표시자를 쓴다)."""
+
+        cursor = self._raw.cursor()
+        psycopg2.extras.execute_values(
+            cursor, query, values, page_size=page_size
+        )
         return cursor
 
     def commit(self):
@@ -136,6 +153,28 @@ def init_db():
         """
         CREATE INDEX IF NOT EXISTS idx_articles_published_at
         ON articles (published_at DESC)
+        """
+    )
+
+    # 검색(WHERE title ILIKE '%keyword%')은 와일드카드가 앞에 붙어서
+    # 일반 B-tree 인덱스로는 가속할 수 없다(Seq Scan으로 빠짐).
+    # pg_trgm의 트라이그램 GIN 인덱스는 문자열 중간에 있는 부분
+    # 일치도 가속할 수 있어서 ILIKE 패턴을 그대로 쓰면서도 인덱스를
+    # 탈 수 있다. (Postgres 기본 전문검색(to_tsvector)은 한글 형태소
+    # 분석을 지원하지 않아 이 프로젝트에는 맞지 않는다고 판단했다.)
+    connection.execute("CREATE EXTENSION IF NOT EXISTS pg_trgm")
+
+    connection.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_articles_title_trgm
+        ON articles USING GIN (title gin_trgm_ops)
+        """
+    )
+
+    connection.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_articles_content_trgm
+        ON articles USING GIN (content gin_trgm_ops)
         """
     )
 
