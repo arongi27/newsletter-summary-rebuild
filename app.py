@@ -27,6 +27,19 @@ ENABLE_VISUALIZATIONS = os.getenv(
 
 ARTICLE_LIST_LIMIT = 10
 
+# OS에 내장된 폰트 경로에 의존하면 배포 환경(Render)에는 한글 폰트가
+# 없어서 워드클라우드/관계도의 한글이 깨진다. 라이선스상 재배포 가능한
+# (SIL OFL) 나눔고딕을 static/fonts/에 직접 번들해 로컬/배포 어디서든
+# 동일하게 동작하게 했다.
+KOREAN_FONT_PATH = os.path.join("static", "fonts", "NanumGothic-Regular.ttf")
+
+
+def get_korean_font_path():
+    if os.path.exists(KOREAN_FONT_PATH):
+        return KOREAN_FONT_PATH
+
+    return None
+
 
 app = Flask(__name__)
 
@@ -330,16 +343,7 @@ def generate_keyword_graph_image(news_list, focus_keyword=""):
     output_filename = "keyword_graph.png"
     output_path = os.path.join("static", output_filename)
 
-    font_candidates = [
-        "C:/Windows/Fonts/malgun.ttf",
-        "/usr/share/fonts/truetype/nanum/NanumGothic.ttf",
-        "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
-    ]
-
-    font_path = next(
-        (path for path in font_candidates if os.path.exists(path)),
-        None,
-    )
+    font_path = get_korean_font_path()
 
     if font_path:
         font_manager.fontManager.addfont(font_path)
@@ -456,16 +460,7 @@ def generate_wordcloud(news_list):
         "wordcloud.png",
     )
 
-    font_candidates = [
-        "C:/Windows/Fonts/malgun.ttf",
-        "/usr/share/fonts/truetype/nanum/NanumGothic.ttf",
-        "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
-    ]
-
-    font_path = next(
-        (path for path in font_candidates if os.path.exists(path)),
-        None,
-    )
+    font_path = get_korean_font_path()
 
     wordcloud = WordCloud(
         font_path=font_path,
