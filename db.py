@@ -1,109 +1,87 @@
-"""SQLite 연결과 스키마 초기화를 담당한다.
+"""PostgreSQL 연결(풀)과 스키마 초기화를 담당한다.
 
-app.py(웹 서버)와 collector.py(배치 수집기)가 같은 DB 스키마를
-공유하기 때문에 커넥션/스키마 관리를 이 모듈로 분리했다.
+app.py(웹 서버)와 collector.py(배치 수집기)가 DATABASE_URL 하나로
+같은 Postgres 인스턴스(Neon)에 접속한다.
 """
 
-import sqlite3
+import os
 
-DB_PATH = "news.db"
+import psycopg2
+import psycopg2.pool
+from dotenv import load_dotenv
+
+load_dotenv()
+
+DATABASE_URL = os.getenv("DATABASE_URL")
+
+if not DATABASE_URL:
+    raise RuntimeError("DATABASE_URL 환경변수가 설정되지 않았습니다.")
+
+# Neon 같은 서버리스 Postgres는 커넥션을 새로 맺는 비용이 상대적으로
+# 크다. 매 요청마다 새로 연결하지 않고 풀에서 커넥션을 빌려 쓰고
+# 반납하는 방식으로 연결 비용을 줄인다.
+_pool = psycopg2.pool.ThreadedConnectionPool(
+    minconn=1,
+    maxconn=10,
+    dsn=DATABASE_URL,
+)
+
+
+class PooledConnection:
+    """psycopg2 커넥션에 sqlite3.Connection과 비슷한 execute() 편의
+    메서드를 얹은 얇은 래퍼. close()는 실제 연결을 끊지 않고
+    풀에 반납하기만 한다."""
+
+    def __init__(self, raw_connection):
+        self._raw = raw_connection
+
+    def execute(self, query, params=None):
+        cursor = self._raw.cursor()
+        cursor.execute(query, params or ())
+        return cursor
+
+    def commit(self):
+        self._raw.commit()
+
+    def rollback(self):
+        self._raw.rollback()
+
+    def close(self):
+        _pool.putconn(self._raw)
 
 
 def get_connection():
-    connection = sqlite3.connect(DB_PATH)
-    connection.execute("PRAGMA foreign_keys = ON")
-    return connection
+    return PooledConnection(_pool.getconn())
 
 
-def migrate_search_keywords_table(connection):
-    """
-    검색어별 수집 여부를 추적하기 위해 last_collected_at 컬럼을 추가한다.
-
-    이 컬럼이 NULL이면 "한 번도 수집된 적 없는 검색어"라는 뜻이고,
-    collector.py는 이런 키워드를 인기 순위와 무관하게 다음 배치에서
-    반드시 수집 대상에 포함시킨다.
-    """
-
-    columns = connection.execute(
-        "PRAGMA table_info(search_keywords)"
-    ).fetchall()
-
-    column_names = {
-        column[1]
-        for column in columns
-    }
-
-    if "last_collected_at" not in column_names:
-        connection.execute(
-            """
-            ALTER TABLE search_keywords
-            ADD COLUMN last_collected_at TEXT
-            """
-        )
-
-
-def migrate_favorites_table(connection):
-    """
-    기존 즐겨찾기 테이블을 API 뉴스용 구조로 변환한다.
-
-    이전 구조:
-    - news_id 기준 중복 확인
-    - 원문 링크 없음
-
-    새로운 구조:
-    - 원문 링크 저장
-    - 사용자와 원문 링크 기준 중복 방지
-    """
-
-    table = connection.execute(
-        """
-        SELECT sql
-        FROM sqlite_master
-        WHERE type = 'table'
-          AND name = 'favorites'
-        """
-    ).fetchone()
-
-    if not table:
-        connection.execute(
-            """
-            CREATE TABLE favorites (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                username TEXT NOT NULL,
-                news_title TEXT NOT NULL,
-                news_content TEXT NOT NULL,
-                news_date TEXT NOT NULL,
-                news_source TEXT NOT NULL,
-                news_link TEXT NOT NULL,
-                UNIQUE(username, news_link)
-            )
-            """
-        )
-        return
-
-    table_sql = table[0] or ""
-
-    columns = connection.execute(
-        "PRAGMA table_info(favorites)"
-    ).fetchall()
-
-    column_names = {
-        column[1]
-        for column in columns
-    }
-
-    migration_needed = (
-        "news_link" not in column_names
-        or "UNIQUE(username, news_id)" in table_sql
-    )
-
-    if not migration_needed:
-        return
+def init_db():
+    connection = get_connection()
 
     connection.execute(
         """
-        CREATE TABLE favorites_new (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+        CREATE TABLE IF NOT EXISTS users (
+            id SERIAL PRIMARY KEY,
+            username TEXT NOT NULL UNIQUE,
+            password TEXT NOT NULL
+        )
+        """
+    )
+
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS search_keywords (
+            id SERIAL PRIMARY KEY,
+            keyword TEXT NOT NULL UNIQUE,
+            count INTEGER NOT NULL DEFAULT 1,
+            last_collected_at TIMESTAMPTZ
+        )
+        """
+    )
+
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS favorites (
+            id SERIAL PRIMARY KEY,
             username TEXT NOT NULL,
             news_title TEXT NOT NULL,
             news_content TEXT NOT NULL,
@@ -115,71 +93,10 @@ def migrate_favorites_table(connection):
         """
     )
 
-    # 기존 즐겨찾기 자료도 삭제하지 않고 보존한다.
-    connection.execute(
-        """
-        INSERT OR IGNORE INTO favorites_new (
-            id,
-            username,
-            news_title,
-            news_content,
-            news_date,
-            news_source,
-            news_link
-        )
-        SELECT
-            id,
-            username,
-            news_title,
-            news_content,
-            news_date,
-            news_source,
-            'legacy://favorite/' || id
-        FROM favorites
-        """
-    )
-
-    connection.execute("DROP TABLE favorites")
-
-    connection.execute(
-        """
-        ALTER TABLE favorites_new
-        RENAME TO favorites
-        """
-    )
-
-
-def init_db():
-    connection = get_connection()
-
-    connection.execute(
-        """
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT NOT NULL UNIQUE,
-            password TEXT NOT NULL
-        )
-        """
-    )
-
-    connection.execute(
-        """
-        CREATE TABLE IF NOT EXISTS search_keywords (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            keyword TEXT NOT NULL UNIQUE,
-            count INTEGER NOT NULL DEFAULT 1
-        )
-        """
-    )
-
-    migrate_search_keywords_table(connection)
-
-    migrate_favorites_table(connection)
-
     connection.execute(
         """
         CREATE TABLE IF NOT EXISTS user_search_keywords (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             username TEXT NOT NULL,
             keyword TEXT NOT NULL,
             count INTEGER NOT NULL DEFAULT 1,
@@ -190,18 +107,18 @@ def init_db():
 
     # 수집기(collector.py)가 채우고, 웹 서버는 조회만 하는 테이블.
     # link에 UNIQUE 제약을 걸어 같은 기사가 여러 번 수집되어도
-    # INSERT OR IGNORE 한 줄로 중복이 걸러지도록 했다.
+    # INSERT ... ON CONFLICT DO NOTHING 한 줄로 중복이 걸러지도록 했다.
     connection.execute(
         """
         CREATE TABLE IF NOT EXISTS articles (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             title TEXT NOT NULL,
             content TEXT NOT NULL,
             link TEXT NOT NULL UNIQUE,
             source TEXT NOT NULL,
             category TEXT NOT NULL,
-            published_at TEXT,
-            collected_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+            published_at TIMESTAMPTZ,
+            collected_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         )
         """
     )
@@ -211,14 +128,14 @@ def init_db():
     connection.execute(
         """
         CREATE INDEX IF NOT EXISTS idx_articles_category_published
-        ON articles(category, published_at DESC)
+        ON articles (category, published_at DESC)
         """
     )
 
     connection.execute(
         """
         CREATE INDEX IF NOT EXISTS idx_articles_published_at
-        ON articles(published_at DESC)
+        ON articles (published_at DESC)
         """
     )
 
@@ -228,10 +145,10 @@ def init_db():
     connection.execute(
         """
         CREATE TABLE IF NOT EXISTS collection_logs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             keyword TEXT NOT NULL,
-            started_at TEXT NOT NULL,
-            finished_at TEXT,
+            started_at TIMESTAMPTZ NOT NULL,
+            finished_at TIMESTAMPTZ,
             fetched_count INTEGER NOT NULL DEFAULT 0,
             inserted_count INTEGER NOT NULL DEFAULT 0,
             duplicate_count INTEGER NOT NULL DEFAULT 0,

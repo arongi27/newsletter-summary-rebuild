@@ -37,6 +37,15 @@ app.secret_key = os.getenv(
 )
 
 
+def format_published_at(value):
+    """TIMESTAMPTZ로 조회된 datetime을 화면 표시용 문자열로 바꾼다."""
+
+    if not value:
+        return ""
+
+    return value.strftime("%Y-%m-%d %H:%M")
+
+
 def rows_to_news_list(rows):
     """articles 테이블 조회 결과를 템플릿에서 쓰는 형식으로 변환한다."""
 
@@ -45,7 +54,7 @@ def rows_to_news_list(rows):
             "id": row[0],
             "title": row[1],
             "content": row[2],
-            "date": row[3] or "",
+            "date": format_published_at(row[3]),
             "source": row[4],
             "link": row[5],
         }
@@ -60,9 +69,9 @@ def search_articles(connection, query, limit=ARTICLE_LIST_LIMIT):
         """
         SELECT id, title, content, published_at, source, link
         FROM articles
-        WHERE title LIKE ? OR content LIKE ?
-        ORDER BY published_at DESC
-        LIMIT ?
+        WHERE title ILIKE %s OR content ILIKE %s
+        ORDER BY published_at DESC NULLS LAST
+        LIMIT %s
         """,
         (pattern, pattern, limit),
     ).fetchall()
@@ -75,9 +84,9 @@ def list_articles_by_category(connection, category, limit=ARTICLE_LIST_LIMIT):
         """
         SELECT id, title, content, published_at, source, link
         FROM articles
-        WHERE category = ?
-        ORDER BY published_at DESC
-        LIMIT ?
+        WHERE category = %s
+        ORDER BY published_at DESC NULLS LAST
+        LIMIT %s
         """,
         (category, limit),
     ).fetchall()
@@ -90,8 +99,8 @@ def list_recent_articles(connection, limit=ARTICLE_LIST_LIMIT):
         """
         SELECT id, title, content, published_at, source, link
         FROM articles
-        ORDER BY published_at DESC
-        LIMIT ?
+        ORDER BY published_at DESC NULLS LAST
+        LIMIT %s
         """,
         (limit,),
     ).fetchall()
@@ -485,7 +494,7 @@ def home():
             """
             SELECT id
             FROM search_keywords
-            WHERE keyword = ?
+            WHERE keyword = %s
             """,
             (query,),
         ).fetchone()
@@ -495,7 +504,7 @@ def home():
                 """
                 UPDATE search_keywords
                 SET count = count + 1
-                WHERE keyword = ?
+                WHERE keyword = %s
                 """,
                 (query,),
             )
@@ -505,7 +514,7 @@ def home():
                 INSERT INTO search_keywords (
                     keyword
                 )
-                VALUES (?)
+                VALUES (%s)
                 """,
                 (query,),
             )
@@ -519,8 +528,8 @@ def home():
                 """
                 SELECT id
                 FROM user_search_keywords
-                WHERE username = ?
-                  AND keyword = ?
+                WHERE username = %s
+                  AND keyword = %s
                 """,
                 (username, query),
             ).fetchone()
@@ -530,8 +539,8 @@ def home():
                     """
                     UPDATE user_search_keywords
                     SET count = count + 1
-                    WHERE username = ?
-                      AND keyword = ?
+                    WHERE username = %s
+                      AND keyword = %s
                     """,
                     (username, query),
                 )
@@ -542,7 +551,7 @@ def home():
                         username,
                         keyword
                     )
-                    VALUES (?, ?)
+                    VALUES (%s, %s)
                     """,
                     (username, query),
                 )
@@ -602,7 +611,7 @@ def autocomplete():
         """
         SELECT keyword
         FROM search_keywords
-        WHERE keyword LIKE ?
+        WHERE keyword LIKE %s
         ORDER BY count DESC, keyword ASC
         LIMIT 5
         """,
@@ -636,7 +645,7 @@ def signup():
             """
             SELECT id
             FROM users
-            WHERE username = ?
+            WHERE username = %s
             """,
             (username,),
         ).fetchone()
@@ -651,7 +660,7 @@ def signup():
                 username,
                 password
             )
-            VALUES (?, ?)
+            VALUES (%s, %s)
             """,
             (username, hashed_password),
         )
@@ -676,7 +685,7 @@ def login():
             """
             SELECT id, username, password
             FROM users
-            WHERE username = ?
+            WHERE username = %s
             """,
             (username,),
         ).fetchone()
@@ -745,8 +754,8 @@ def add_favorite(news_id):
         """
         SELECT id
         FROM favorites
-        WHERE username = ?
-          AND news_link = ?
+        WHERE username = %s
+          AND news_link = %s
         """,
         (username, news_link),
     ).fetchone()
@@ -762,7 +771,7 @@ def add_favorite(news_id):
                 news_source,
                 news_link
             )
-            VALUES (?, ?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s, %s)
             """,
             (
                 username,
@@ -803,7 +812,7 @@ def favorites():
             news_source,
             news_link
         FROM favorites
-        WHERE username = ?
+        WHERE username = %s
         ORDER BY id DESC
         """,
         (username,),
@@ -832,8 +841,8 @@ def delete_favorite(favorite_id):
     connection.execute(
         """
         DELETE FROM favorites
-        WHERE id = ?
-          AND username = ?
+        WHERE id = %s
+          AND username = %s
         """,
         (favorite_id, username),
     )
@@ -857,7 +866,7 @@ def interests():
         """
         SELECT keyword, count
         FROM user_search_keywords
-        WHERE username = ?
+        WHERE username = %s
         ORDER BY count DESC, keyword ASC
         LIMIT 5
         """,
@@ -924,7 +933,7 @@ def profile():
         """
         SELECT COUNT(*)
         FROM favorites
-        WHERE username = ?
+        WHERE username = %s
         """,
         (username,),
     ).fetchone()[0]
@@ -936,7 +945,7 @@ def profile():
             0
         )
         FROM user_search_keywords
-        WHERE username = ?
+        WHERE username = %s
         """,
         (username,),
     ).fetchone()[0]
@@ -945,7 +954,7 @@ def profile():
         """
         SELECT keyword, count
         FROM user_search_keywords
-        WHERE username = ?
+        WHERE username = %s
         ORDER BY count DESC, keyword ASC
         LIMIT 1
         """,

@@ -61,14 +61,17 @@ def get_news_source(link):
 
 
 def parse_pub_date(pub_date_text):
-    """API가 내려주는 RFC 822 날짜 문자열을 정렬 가능한 형식으로 바꾼다."""
+    """API가 내려주는 RFC 822 날짜 문자열을 timezone-aware datetime으로 바꾼다.
+
+    DB의 published_at 컬럼이 TIMESTAMPTZ이므로, 문자열로 가공하지 않고
+    datetime 객체 그대로 돌려주면 psycopg2가 알아서 변환해 저장한다.
+    """
 
     if not pub_date_text:
         return None
 
     try:
-        parsed = parsedate_to_datetime(pub_date_text)
-        return parsed.strftime("%Y-%m-%d %H:%M:%S")
+        return parsedate_to_datetime(pub_date_text)
     except (TypeError, ValueError):
         return None
 

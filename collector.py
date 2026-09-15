@@ -13,7 +13,7 @@
 
 import argparse
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 
 from dotenv import load_dotenv
 
@@ -44,7 +44,7 @@ def get_collection_targets(connection):
         SELECT keyword
         FROM search_keywords
         ORDER BY count DESC, keyword ASC
-        LIMIT ?
+        LIMIT %s
         """,
         (TRENDING_KEYWORD_LIMIT,),
     ).fetchall()
@@ -55,7 +55,7 @@ def get_collection_targets(connection):
         FROM search_keywords
         WHERE last_collected_at IS NULL
         ORDER BY id ASC
-        LIMIT ?
+        LIMIT %s
         """,
         (NEW_KEYWORD_BATCH_LIMIT,),
     ).fetchall()
@@ -76,7 +76,7 @@ def get_collection_targets(connection):
 def collect_one(connection, keyword):
     """키워드 하나를 수집해 DB에 저장하고, 실행 로그를 남긴다."""
 
-    started_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    started_at = datetime.now(timezone.utc)
 
     fetched_count = 0
     inserted_count = 0
@@ -97,10 +97,11 @@ def collect_one(connection, keyword):
         for article in articles:
             cursor = connection.execute(
                 """
-                INSERT OR IGNORE INTO articles (
+                INSERT INTO articles (
                     title, content, link, source, category, published_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                ON CONFLICT (link) DO NOTHING
                 """,
                 (
                     article["title"],
@@ -125,7 +126,7 @@ def collect_one(connection, keyword):
         error_message = str(error)
         print(f"[수집 실패] '{keyword}': {error_message}")
 
-    finished_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    finished_at = datetime.now(timezone.utc)
 
     if status == "success":
         # search_keywords에 있는 키워드라면(즉, 사용자가 직접 검색한
@@ -136,8 +137,8 @@ def collect_one(connection, keyword):
         connection.execute(
             """
             UPDATE search_keywords
-            SET last_collected_at = ?
-            WHERE keyword = ?
+            SET last_collected_at = %s
+            WHERE keyword = %s
             """,
             (finished_at, keyword),
         )
@@ -149,7 +150,7 @@ def collect_one(connection, keyword):
             fetched_count, inserted_count, duplicate_count,
             status, error_message
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
         """,
         (
             keyword,

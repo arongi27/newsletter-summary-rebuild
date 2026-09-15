@@ -7,3 +7,4 @@ networkx
 matplotlib
 kiwipiepy
 gunicorn
+psycopg2-binary
