@@ -2,10 +2,12 @@
 
 운영 환경에서는 GitHub Actions의 스케줄 워크플로(.github/workflows/
 collect.yml)가 이 스크립트를 매시간 1회 실행한다. 웹 서버(app.py)는
-요청을 처리하는 동안 외부 API를 직접 호출하지 않고, 이 스크립트가
-채워둔 articles 테이블을 조회한다. 수집(배치)과 서빙(웹)을 분리해
-API 장애나 지연이 곧바로 사용자 응답 지연으로 이어지지 않게 하는 것이
-목적이다.
+평소에는 외부 API를 직접 호출하지 않고 이 스크립트가 채워둔 articles
+테이블을 조회하지만, "한 번도 수집된 적 없는 검색어"에 한해서는 속도
+제한 안에서 그 자리에서 짧게 API를 불러 즉시 보여준다(app.py의
+fetch_and_store_realtime 참고, README 5.14). 이 배치는 그 실시간
+조회가 실패했거나 아직 한 번도 검색되지 않은 키워드까지 포함해
+넓게 커버하는 안전망 역할이다.
 
 기본 실행(python collector.py)은 한 번 수집하고 종료한다. 로컬에서
 반복 수집을 확인하고 싶을 때는
@@ -31,15 +33,36 @@ FIXED_CATEGORIES = ["스포츠", "연예", "경제", "IT", "사회", "생활문�
 TRENDING_KEYWORD_LIMIT = 10
 
 # 한 번도 수집되지 않은 검색어는 인기 순위와 무관하게 무조건 수집한다
-# (검색했는데 결과가 계속 비어 있는 상태를 막기 위함). 다만 한 배치에서
-# 신규 키워드가 몰릴 경우 API 호출이 급증하지 않도록 상한을 둔다.
+# (검색했는데 결과가 계속 비어 있는 상태를 막기 위함). 이제는 웹의
+# 실시간 조회가 대부분 먼저 처리하지만, 속도 제한에 걸렸거나 API가
+# 실패했던 검색어는 여기로 넘어온다. 다만 한 배치에서 신규 키워드가
+# 몰릴 경우 API 호출이 급증하지 않도록 상한을 둔다.
 NEW_KEYWORD_BATCH_LIMIT = 20
+
+# 한 번 수집된 검색어라도 사용자가 계속 찾는데 오래 갱신이 안 되면
+# 오래된 기사만 계속 보여주게 된다. "최근에 검색됐고(=아직 관심이
+# 있고) 마지막 수집이 오래된" 검색어를 재수집 대상에 넣는다.
+STALE_SEARCH_WITHIN_DAYS = 7
+STALE_RECOLLECT_AFTER_HOURS = 6
+STALE_SEARCHED_KEYWORD_LIMIT = 10
 
 ARTICLES_PER_KEYWORD = 20
 
+# 한 배치가 부를 수 있는 최대 API 호출 수(키워드당 1회 호출, 전부
+# 겹치지 않는 최악의 경우). 고정 카테고리 + 인기 검색어 + 미수집
+# 검색어 + 재수집 대상을 전부 더한 값이다. GitHub Actions 워크플로의
+# timeout-minutes(10분)를 넘기지 않는지 이 상수 기준으로 가늠할 수 있다.
+MAX_TARGETS_PER_BATCH = (
+    len(FIXED_CATEGORIES)
+    + TRENDING_KEYWORD_LIMIT
+    + NEW_KEYWORD_BATCH_LIMIT
+    + STALE_SEARCHED_KEYWORD_LIMIT
+)
+
 
 def get_collection_targets(connection):
-    """고정 카테고리 + 인기 검색어 + 미수집 검색어를 합친 수집 대상 목록을 만든다."""
+    """고정 카테고리 + 인기 검색어 + 미수집 검색어 + 재수집 대상을 합쳐
+    수집 대상 목록을 만든다. 최악의 경우 MAX_TARGETS_PER_BATCH개다."""
 
     trending_rows = connection.execute(
         """
@@ -62,6 +85,23 @@ def get_collection_targets(connection):
         (NEW_KEYWORD_BATCH_LIMIT,),
     ).fetchall()
 
+    stale_searched_rows = connection.execute(
+        """
+        SELECT keyword
+        FROM search_keywords
+        WHERE last_searched_at > NOW() - (%s * INTERVAL '1 day')
+          AND last_collected_at IS NOT NULL
+          AND last_collected_at < NOW() - (%s * INTERVAL '1 hour')
+        ORDER BY last_searched_at DESC
+        LIMIT %s
+        """,
+        (
+            STALE_SEARCH_WITHIN_DAYS,
+            STALE_RECOLLECT_AFTER_HOURS,
+            STALE_SEARCHED_KEYWORD_LIMIT,
+        ),
+    ).fetchall()
+
     targets = list(FIXED_CATEGORIES)
 
     for (keyword,) in trending_rows:
@@ -69,6 +109,10 @@ def get_collection_targets(connection):
             targets.append(keyword)
 
     for (keyword,) in never_collected_rows:
+        if keyword not in targets:
+            targets.append(keyword)
+
+    for (keyword,) in stale_searched_rows:
         if keyword not in targets:
             targets.append(keyword)
 
@@ -180,6 +224,26 @@ def collect_one(connection, keyword):
     return status == "success"
 
 
+# app.py의 실시간 조회 속도 제한(README 5.14)이 쓰는 로그 테이블.
+# app.py도 자리를 예약할 때마다 오래된 행을 지우지만, 그건 "누군가
+# 실시간 조회를 시도할 때만" 일어난다. 이 배치는 시도 여부와 무관하게
+# 매시간 한 번씩 확실히 청소해서, 오랫동안 아무도 새 키워드를 검색하지
+# 않아도 테이블이 무한정 방치되지 않게 한다.
+REALTIME_FETCH_LOG_RETENTION_HOURS = 1
+
+
+def cleanup_realtime_fetch_log(connection):
+    cursor = connection.execute(
+        """
+        DELETE FROM realtime_fetch_log
+        WHERE requested_at < NOW() - (%s * INTERVAL '1 hour')
+        """,
+        (REALTIME_FETCH_LOG_RETENTION_HOURS,),
+    )
+    connection.commit()
+    return cursor.rowcount
+
+
 def run_once():
     """수집 대상 전체를 한 바퀴 수집한다. API 실패와 키워드 단위 DB
     오류는 키워드별로 격리해서, 한 키워드의 실패가 다른 키워드 수집을
@@ -196,7 +260,10 @@ def run_once():
             for keyword in targets
         )
 
+        deleted_log_count = cleanup_realtime_fetch_log(connection)
+
     print(f"[수집 종료] 성공 {success_count}/{len(targets)}")
+    print(f"[정리] realtime_fetch_log 오래된 행 {deleted_log_count}건 삭제")
 
 
 def main():
