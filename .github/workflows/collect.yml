@@ -7,8 +7,17 @@ name: Collect news
 
 on:
   schedule:
-    - cron: "0 * * * *" # 매시 정각(UTC 기준)
+    # 매시 17분(UTC 기준). GitHub은 부하가 높을 때 스케줄 실행을 지연시키거나
+    # 건너뛸 수 있고, 정각은 실행이 몰리는 시간이라 피한다.
+    - cron: "17 * * * *"
   workflow_dispatch: {} # Actions 탭에서 수동 실행 버튼
+
+# 수동 실행과 스케줄 실행이 겹쳐 수집기가 동시에 두 개 돌지 않게 한다.
+# (기사 중복은 DB 제약이 막지만, API 호출이 두 배가 된다.)
+# 실행 중인 작업은 취소하지 않고 끝날 때까지 기다린다.
+concurrency:
+  group: collect-news
+  cancel-in-progress: false
 
 jobs:
   collect:

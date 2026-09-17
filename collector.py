@@ -1,13 +1,14 @@
 """네이버 뉴스를 주기적으로 수집해 DB에 적재하는 배치 스크립트.
 
-운영 환경에서는 cron(리눅스)이나 작업 스케줄러(윈도우)가 이 스크립트를
-일정 주기로 실행한다고 가정한다. 웹 서버(app.py)는 요청을 처리하는
-동안 외부 API를 직접 호출하지 않고, 이 스크립트가 채워둔 DB만 조회한다.
-수집(배치)과 서빙(웹)을 분리해 API 장애나 지연이 곧바로 사용자 응답
-지연으로 이어지지 않게 하는 것이 목적이다.
+운영 환경에서는 GitHub Actions의 스케줄 워크플로(.github/workflows/
+collect.yml)가 이 스크립트를 매시간 1회 실행한다. 웹 서버(app.py)는
+요청을 처리하는 동안 외부 API를 직접 호출하지 않고, 이 스크립트가
+채워둔 articles 테이블을 조회한다. 수집(배치)과 서빙(웹)을 분리해
+API 장애나 지연이 곧바로 사용자 응답 지연으로 이어지지 않게 하는 것이
+목적이다.
 
-기본 실행(python collector.py)은 한 번 수집하고 종료한다. cron/작업
-스케줄러 없이 로컬에서 바로 반복 수집을 보고 싶을 때는
+기본 실행(python collector.py)은 한 번 수집하고 종료한다. 로컬에서
+반복 수집을 확인하고 싶을 때는
 `python collector.py --loop --interval-minutes 10` 옵션을 사용한다.
 """
 
@@ -15,6 +16,7 @@ import argparse
 import time
 from datetime import datetime, timezone
 
+import psycopg2
 from dotenv import load_dotenv
 
 import db
@@ -120,10 +122,13 @@ def collect_one(connection, keyword):
 
         connection.commit()
 
-    except NaverApiError as error:
+    except (NaverApiError, psycopg2.Error) as error:
+        # API 실패뿐 아니라 이 키워드를 저장하다 난 DB 오류도 여기서 격리해
+        # 다음 키워드 수집을 계속한다. 연결 자체가 끊긴 경우에는 아래 로그
+        # 기록에서 다시 오류가 나고, 그때는 배치 전체가 중단된다.
         connection.rollback()
         status = "failed"
-        error_message = str(error)
+        error_message = f"{type(error).__name__}: {error}"
         print(f"[수집 실패] '{keyword}': {error_message}")
 
     finished_at = datetime.now(timezone.utc)
@@ -176,21 +181,21 @@ def collect_one(connection, keyword):
 
 
 def run_once():
-    """수집 대상 전체를 한 바퀴 수집한다. 한 키워드의 실패가 다른
-    키워드 수집을 막지 않도록 키워드별로 예외를 격리해서 처리한다."""
+    """수집 대상 전체를 한 바퀴 수집한다. API 실패와 키워드 단위 DB
+    오류는 키워드별로 격리해서, 한 키워드의 실패가 다른 키워드 수집을
+    막지 않게 한다. (DB 연결이 끊기면 배치 전체를 중단한다.)"""
 
     db.init_db()
-    connection = db.get_connection()
 
-    targets = get_collection_targets(connection)
-    print(f"[수집 시작] 대상 키워드 {len(targets)}개: {', '.join(targets)}")
+    with db.connection() as connection:
+        targets = get_collection_targets(connection)
+        print(f"[수집 시작] 대상 키워드 {len(targets)}개: {', '.join(targets)}")
 
-    success_count = sum(
-        collect_one(connection, keyword)
-        for keyword in targets
-    )
+        success_count = sum(
+            collect_one(connection, keyword)
+            for keyword in targets
+        )
 
-    connection.close()
     print(f"[수집 종료] 성공 {success_count}/{len(targets)}")
 
 
