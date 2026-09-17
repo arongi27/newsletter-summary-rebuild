@@ -16,16 +16,16 @@
     <div class="title-row">
         <h1>내 프로필</h1>
 
-        <a href="{{ url_for('profile') }}" class="profile-icon">
+        <a href="{{ url_for('profile') }}" class="profile-icon" aria-label="프로필">
             👤
         </a>
     </div>
 
     <main>
 
-        <article style="text-align:center;">
+        <article class="profile-summary">
 
-            <div style="font-size:70px;">👤</div>
+            <div class="profile-avatar" aria-hidden="true">👤</div>
 
             <h2>{{ username }}</h2>
 
@@ -56,13 +56,38 @@
 
         </article>
 
-        <article style="text-align:center;">
+        <article>
 
-            <a href="{{ url_for('logout') }}">
-                <button class="delete-button">
+            <h3>🔒 내 검색 기록</h3>
+
+            <p>
+                검색 기록은 추천뉴스의 관심 키워드 분석에만 사용됩니다.
+                삭제하면 관심 키워드와 추천이 초기화됩니다.
+            </p>
+
+            <form
+                method="POST"
+                action="{{ url_for('delete_search_history') }}"
+                onsubmit="return confirm('내 검색 기록을 모두 삭제할까요?');"
+            >
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                <button type="submit" class="delete-button">
+                    검색 기록 삭제
+                </button>
+            </form>
+
+        </article>
+
+        <article class="profile-actions">
+
+            <form method="POST" action="{{ url_for('logout') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                <button type="submit" class="delete-button">
                     로그아웃
                 </button>
-            </a>
+            </form>
 
         </article>
 

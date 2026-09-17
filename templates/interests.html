@@ -47,8 +47,8 @@
 
             {% if interest_bars %}
                 <p class="interest-description">
-                    최근 검색 기록을 기반으로 분석한
-                    관심 키워드입니다.
+                    내 검색 기록에서 많이 검색한 키워드입니다.
+                    막대 길이는 가장 많이 검색한 키워드를 기준으로 한 비율입니다.
                 </p>
 
                 <div class="interest-bar-list">
@@ -77,7 +77,7 @@
             {% else %}
                 <p>
                     아직 분석할 검색 기록이 없습니다.
-                    로그인 상태에서 뉴스를 검색해 보세요.
+                    뉴스를 검색하면 관심 키워드가 여기에 표시됩니다.
                 </p>
             {% endif %}
         </section>
@@ -103,6 +103,7 @@
 
                 <p>{{ news.content }}</p>
 
+                {# 기사 정보는 서버가 news_id로 articles에서 직접 조회한다. #}
                 <form
                     method="POST"
                     action="{{ url_for(
@@ -110,35 +111,7 @@
                         news_id=news.id
                     ) }}"
                 >
-                    <input
-                        type="hidden"
-                        name="news_title"
-                        value="{{ news.title }}"
-                    >
-
-                    <input
-                        type="hidden"
-                        name="news_content"
-                        value="{{ news.content }}"
-                    >
-
-                    <input
-                        type="hidden"
-                        name="news_date"
-                        value="{{ news.date }}"
-                    >
-
-                    <input
-                        type="hidden"
-                        name="news_source"
-                        value="{{ news.source }}"
-                    >
-
-                    <input
-                        type="hidden"
-                        name="news_link"
-                        value="{{ news.link }}"
-                    >
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
                     <button
                         type="submit"

@@ -86,6 +86,14 @@ button:hover {
     background-color: #3498db;
 }
 
+/* 키보드로 이동할 때 현재 위치가 보이도록 한다. */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible {
+    outline: 3px solid #1d78b5;
+    outline-offset: 2px;
+}
+
 /* 검색 영역 */
 
 .search-area {
@@ -210,7 +218,7 @@ button:hover {
 }
 
 .popular-list li span {
-    color: #8a98a6;
+    color: #6b7a88;
     font-size: 13px;
 }
 
@@ -290,7 +298,7 @@ article h3 {
 }
 
 article small {
-    color: #7a8a99;
+    color: #5f6f7e;
 }
 
 article p {
@@ -301,12 +309,16 @@ article p {
 
 /* 즐겨찾기와 삭제 버튼 */
 
+/*
+노란 배경에 흰 글자는 명도 대비가 너무 낮아 읽기 어렵다.
+웹 접근성 기준(텍스트 대비 4.5:1 이상)을 만족하도록 진한 갈색 글자를 쓴다.
+*/
 .favorite-button {
     margin-top: 12px;
     padding: 8px 14px;
     border-radius: 18px;
     background-color: #ffd966;
-    color: #ffffff;
+    color: #4a3800;
 }
 
 .favorite-button:hover {
@@ -486,6 +498,49 @@ footer a:hover {
     color: #378fc8;
 }
 
+/* 폼 안내와 오류 메시지 */
+
+.form-error,
+.form-notice {
+    margin: 0 0 18px;
+    padding: 12px 16px;
+    border-radius: 12px;
+    font-size: 15px;
+    line-height: 1.5;
+    text-align: left;
+}
+
+.form-error {
+    border: 1px solid #f1b8b4;
+    background-color: #fdecea;
+    color: #9b1c14;
+}
+
+.form-notice {
+    border: 1px solid #b9dcc4;
+    background-color: #e8f5ec;
+    color: #1e5b33;
+}
+
+.form-hint {
+    margin: -6px 0 0;
+    color: #5f6f7e;
+    font-size: 13px;
+    line-height: 1.6;
+    text-align: left;
+}
+
+/* 프로필 페이지 */
+
+.profile-summary,
+.profile-actions {
+    text-align: center;
+}
+
+.profile-avatar {
+    font-size: 70px;
+}
+
 /* 태블릿 */
 
 @media (max-width: 900px) {
@@ -596,6 +651,11 @@ footer a:hover {
         padding: 30px 22px;
     }
 
+    .login-card input,
+    .login-card input::placeholder {
+        font-size: 18px !important;
+    }
+
     footer {
         padding: 10px 6px;
     }
@@ -692,7 +752,7 @@ footer a:hover {
 
 .interest-description {
     margin-bottom: 20px;
-    color: #6b7280;
+    color: #5f6b76;
     font-size: 14px;
     line-height: 1.6;
 }
@@ -741,6 +801,19 @@ footer a:hover {
 
 .interest-bar-item:hover .interest-bar-fill {
     filter: brightness(0.95);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    article,
+    .keyword-tag,
+    .interest-bar-fill {
+        transition: none;
+    }
+
+    article:hover,
+    .keyword-tag:hover {
+        transform: none;
+    }
 }
 
 @media (max-width: 600px) {

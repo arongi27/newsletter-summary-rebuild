@@ -17,11 +17,11 @@
         <h1>NewsHub</h1>
 
         {% if session.get("username") %}
-            <a href="{{ url_for('profile') }}" class="profile-icon">
+            <a href="{{ url_for('profile') }}" class="profile-icon" aria-label="프로필">
                 👤
             </a>
         {% else %}
-            <a href="{{ url_for('login') }}" class="profile-icon">
+            <a href="{{ url_for('login') }}" class="profile-icon" aria-label="로그인">
                 👤
             </a>
         {% endif %}
@@ -81,7 +81,7 @@
 
     <main>
 
-        {% if wordcloud_filename %}
+        {% if wordcloud_image %}
         <section class="visualization-box">
             <h2>뉴스 한눈에 보기</h2>
 
@@ -90,17 +90,14 @@
             </p>
 
             <img
-                src="{{ url_for(
-                    'static',
-                    filename=wordcloud_filename
-                ) }}"
+                src="{{ wordcloud_image }}"
                 alt="현재 뉴스의 핵심 키워드 워드클라우드"
                 class="wordcloud-image"
             >
         </section>
         {% endif %}
 
-        {% if keyword_graph %}
+        {% if keyword_graph_image %}
         <section class="visualization-box">
             <h2>🕸 뉴스 관계도</h2>
 
@@ -109,7 +106,7 @@
             </p>
 
             <img
-                src="{{ url_for('static', filename=keyword_graph) }}"
+                src="{{ keyword_graph_image }}"
                 alt="뉴스 관계도"
                 class="keyword-graph-image"
             >
@@ -122,7 +119,7 @@
             {% elif category %}
                 '{{ category }}' 카테고리 뉴스
             {% else %}
-                오늘의 뉴스
+                최신 뉴스
             {% endif %}
         </h2>
 
@@ -146,6 +143,7 @@
 
                 <p>{{ news.content }}</p>
 
+                {# 기사 정보는 서버가 news_id로 articles에서 직접 조회한다. #}
                 <form
                     method="POST"
                     action="{{ url_for(
@@ -153,35 +151,7 @@
                         news_id=news.id
                     ) }}"
                 >
-                    <input
-                        type="hidden"
-                        name="news_title"
-                        value="{{ news.title }}"
-                    >
-
-                    <input
-                        type="hidden"
-                        name="news_content"
-                        value="{{ news.content }}"
-                    >
-
-                    <input
-                        type="hidden"
-                        name="news_date"
-                        value="{{ news.date }}"
-                    >
-
-                    <input
-                        type="hidden"
-                        name="news_source"
-                        value="{{ news.source }}"
-                    >
-
-                    <input
-                        type="hidden"
-                        name="news_link"
-                        value="{{ news.link }}"
-                    >
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
                     <button
                         type="submit"
@@ -193,7 +163,7 @@
             </article>
             {% endfor %}
 
-        {% elif query %}
+        {% elif query and waiting_for_collection %}
             <p>아직 수집되지 않은 키워드입니다. 다음 수집 때 반영됩니다.</p>
         {% else %}
             <p>검색 결과가 없습니다.</p>

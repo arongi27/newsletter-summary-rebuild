@@ -17,11 +17,11 @@
         <h1>즐겨찾기</h1>
 
         {% if session.get("username") %}
-            <a href="{{ url_for('profile') }}" class="profile-icon">
+            <a href="{{ url_for('profile') }}" class="profile-icon" aria-label="프로필">
                 👤
             </a>
         {% else %}
-            <a href="{{ url_for('login') }}" class="profile-icon">
+            <a href="{{ url_for('login') }}" class="profile-icon" aria-label="로그인">
                 👤
             </a>
         {% endif %}
@@ -34,7 +34,9 @@
             <article>
 
                 <h3>
-                    {% if news[5] and not news[5].startswith('legacy://') %}
+                    {# http/https 주소만 링크로 만든다. 예전 데이터(legacy://)나
+                       javascript: 같은 주소는 제목 글자로만 보여준다. #}
+                    {% if news[5] and (news[5].startswith('http://') or news[5].startswith('https://')) %}
                         <a
                             href="{{ news[5] }}"
                             target="_blank"
@@ -61,6 +63,8 @@
                         favorite_id=news[0]
                     ) }}"
                 >
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
                     <button
                         type="submit"
                         class="delete-button"

@@ -3,26 +3,96 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>회원가입</title>
+    <title>회원가입 - NewsHub</title>
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', filename='style.css') }}"
+    >
 </head>
+
 <body>
 
-    <h1>회원가입</h1>
+<div class="login-container">
 
-    <form method="POST" action="/signup">
-        <p>
-            <label for="username">아이디</label><br>
-            <input type="text" id="username" name="username" required>
+    <div class="login-card">
+
+        <h1>회원가입</h1>
+
+        <p class="login-subtitle">
+            가입하면 즐겨찾기와 맞춤 추천을 쓸 수 있습니다.
         </p>
 
-        <p>
-            <label for="password">비밀번호</label><br>
-            <input type="password" id="password" name="password" required>
-        </p>
+        {% if error %}
+        <p class="form-error" role="alert">{{ error }}</p>
+        {% endif %}
 
-        <button type="submit">회원가입</button>
-    </form>
+        <form
+            method="POST"
+            action="{{ url_for('signup') }}"
+        >
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <input
+                type="text"
+                id="username"
+                name="username"
+                aria-label="아이디"
+                aria-describedby="username-hint"
+                placeholder="아이디"
+                value="{{ username or '' }}"
+                autocomplete="username"
+                spellcheck="false"
+                autocapitalize="off"
+                autocorrect="off"
+                minlength="4"
+                maxlength="20"
+                pattern="[A-Za-z0-9_]{4,20}"
+                required
+            >
+
+            <input
+                type="password"
+                id="password"
+                name="password"
+                aria-label="비밀번호"
+                aria-describedby="password-hint"
+                placeholder="비밀번호"
+                autocomplete="new-password"
+                minlength="8"
+                maxlength="128"
+                required
+            >
+
+            <p class="form-hint">
+                <span id="username-hint">아이디: 영문, 숫자, 밑줄(_) 4~20자</span><br>
+                <span id="password-hint">비밀번호: 8자 이상</span>
+            </p>
+
+            <button
+                type="submit"
+                class="login-button"
+            >
+                가입하기
+            </button>
+
+        </form>
+
+        <div class="login-links">
+
+            <a href="{{ url_for('login') }}">
+                로그인
+            </a>
+
+            <a href="{{ url_for('home') }}">
+                홈으로
+            </a>
+
+        </div>
+
+    </div>
+
+</div>
 
 </body>
 </html>
-

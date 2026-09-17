@@ -23,16 +23,26 @@
             로그인하여 맞춤형 뉴스를 만나보세요.
         </p>
 
+        {% if joined %}
+        <p class="form-notice" role="status">가입이 완료되었습니다. 로그인해 주세요.</p>
+        {% endif %}
+
+        {% if error %}
+        <p class="form-error" role="alert">{{ error }}</p>
+        {% endif %}
+
         <form
             method="POST"
             action="{{ url_for('login') }}"
-            autocomplete="off"
         >
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
             <input
                 type="text"
                 name="username"
+                aria-label="아이디"
                 placeholder="아이디"
+                value="{{ username or '' }}"
                 autocomplete="username"
                 spellcheck="false"
                 autocapitalize="off"
@@ -43,6 +53,7 @@
             <input
                 type="password"
                 name="password"
+                aria-label="비밀번호"
                 placeholder="비밀번호"
                 autocomplete="current-password"
                 required
