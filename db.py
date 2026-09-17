@@ -118,7 +118,8 @@ def init_db():
                 id SERIAL PRIMARY KEY,
                 keyword TEXT NOT NULL UNIQUE,
                 count INTEGER NOT NULL DEFAULT 1,
-                last_collected_at TIMESTAMPTZ
+                last_collected_at TIMESTAMPTZ,
+                last_searched_at TIMESTAMPTZ
             )
             """
         )
@@ -229,6 +230,27 @@ def init_db():
                 status TEXT NOT NULL,
                 error_message TEXT
             )
+            """
+        )
+
+        # 실시간 조회(app.py가 "한 번도 수집된 적 없는 검색어"를 그 자리에서
+        # 네이버 API로 가져오는 기능)를 전체 기준으로 분당 제한하기 위한
+        # 호출 기록. gunicorn이 워커를 여러 개 띄워도 각 워커는 독립된
+        # 프로세스라 메모리 카운터를 공유할 수 없어서, DB에 호출 시각을
+        # 남기고 "최근 60초 안의 행 수"로 세는 방식을 쓴다.
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS realtime_fetch_log (
+                id SERIAL PRIMARY KEY,
+                requested_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            )
+            """
+        )
+
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_realtime_fetch_log_requested_at
+            ON realtime_fetch_log (requested_at)
             """
         )
 

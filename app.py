@@ -18,12 +18,15 @@ import io
 import os
 import re
 import secrets
+import threading
 
 import db
+from naver_client import NaverApiError, convert_api_items, fetch_naver_news
 
 load_dotenv()
 
 kiwi = None
+_kiwi_init_lock = threading.Lock()
 IS_RENDER = bool(os.getenv("RENDER"))
 ENABLE_VISUALIZATIONS = os.getenv(
     "ENABLE_VISUALIZATIONS",
@@ -31,6 +34,42 @@ ENABLE_VISUALIZATIONS = os.getenv(
 ).lower() == "true"
 
 ARTICLE_LIST_LIMIT = 10
+
+# 검색했는데 결과가 없으면 "아직 수집 안 됨"과 "수집했지만 없음"을
+# 구분해서 보여주는데, 전자는 다음 배치(최대 1시간 뒤)까지 기다려야
+# 해서 실제로 써보니 불편했다. 그래서 이 경우에 한해 그 자리에서
+# 네이버 API를 짧게 1회만 불러 바로 보여주고 DB에도 저장한다.
+#
+# 배치(collector.py)는 재시도 여유가 있지만, 웹 요청은 사용자를 오래
+# 기다리게 할 수 없다. 기존 fetch_naver_news 기본값(timeout=10초 x
+# 최대 3회 재시도, 최악 33초)을 그대로 쓰면 안 되므로 훨씬 짧고
+# 재시도 없는 값을 쓴다: 실패/시간초과면 기다리지 않고 기존 "아직
+# 수집되지 않은 키워드" 안내로 넘어간다.
+#
+# requests의 timeout은 숫자 하나만 주면 "연결"과 "응답 대기"에 각각
+# 독립적으로 적용된다(공식 문서). 즉 연결은 성공했는데 응답이 느리면
+# 연결 대기 시간 + 응답 대기 시간이 더해져 최악의 경우 timeout의
+# 최대 약 2배가 걸릴 수 있다. 실제로 이 값을 3초로 두고 응답이 없는
+# 주소로 테스트했더니 총 대기가 약 5.9~6초였다(정확히 이 매커니즘).
+# 사용자가 실제로 기다리는 시간을 3초 안팎으로 맞추려고 1.5초로 낮췄다
+# (최악의 경우 약 3초).
+REALTIME_FETCH_TIMEOUT_SECONDS = 1.5
+REALTIME_FETCH_MAX_RETRIES = 1
+
+# 이 실시간 조회가 폭주하면 사실상 API 키 하나로 여러 사용자가 동시에
+# 검색 API를 두드리는 셈이라, 전체(사용자 전체 합산) 기준으로 분당
+# 상한을 둔다. gunicorn은 워커를 여러 프로세스로 띄우는데, 각 워커는
+# 메모리를 공유하지 않아 프로세스 안 카운터로는 전체 합산이 안 된다.
+# 그래서 "호출 시각을 DB에 남기고 최근 60초 안의 행 수를 센다"로
+# 워커 경계와 무관하게 정확히 세지도록 했다(자세한 이유는 아래
+# try_reserve_realtime_fetch_slot 참고).
+REALTIME_FETCH_RATE_LIMIT = 10
+REALTIME_FETCH_RATE_WINDOW_SECONDS = 60
+
+# pg_advisory_xact_lock에 쓰는 임의의 정수 키. 이 프로젝트 안에서
+# 이 용도로만 쓰는 락이라 다른 값과 겹칠 걱정 없이 아무 정수나 고정해
+# 쓰면 된다.
+REALTIME_FETCH_LOCK_KEY = 872315
 
 # 회원가입 입력 규칙. 기존 사용자의 로그인에는 적용하지 않는다.
 USERNAME_PATTERN = re.compile(r"^[A-Za-z0-9_]{4,20}$")
@@ -232,10 +271,12 @@ def record_search(connection, query, username):
 
     connection.execute(
         """
-        INSERT INTO search_keywords (keyword)
-        VALUES (%s)
+        INSERT INTO search_keywords (keyword, last_searched_at)
+        VALUES (%s, NOW())
         ON CONFLICT (keyword)
-        DO UPDATE SET count = search_keywords.count + 1
+        DO UPDATE SET
+            count = search_keywords.count + 1,
+            last_searched_at = NOW()
         """,
         (query,),
     )
@@ -269,6 +310,118 @@ def is_waiting_for_collection(connection, query):
     ).fetchone()
 
     return row is None or row[0] is None
+
+
+def try_reserve_realtime_fetch_slot(connection):
+    """전체 기준으로 최근 60초 안에 실시간 조회를 10회 넘게 하지 않도록
+    자리를 하나 예약한다. 예약에 성공하면 True를 반환하고, 이미
+    한도에 도달했으면 아무것도 하지 않고 False를 반환한다.
+
+    "최근 60초 행 수를 센 뒤 10보다 작으면 삽입"을 그냥 하면, gunicorn
+    워커 두 개가 동시에 세었을 때 둘 다 "9개니까 통과"로 보고 동시에
+    삽입해 순간적으로 한도를 넘길 수 있다(check-then-act 경쟁). 이걸
+    막으려고 pg_advisory_xact_lock으로 "확인 후 삽입"을 워커 전체에서
+    한 번에 하나씩만 실행되게 직렬화한다. 이 락은 있는 동안 다른
+    요청의 실시간 조회 자리 확인만 잠깐 대기시키고(수십 ms 이하),
+    현재 트랜잭션이 commit/rollback되면 자동으로 풀린다.
+    """
+
+    connection.execute(
+        "SELECT pg_advisory_xact_lock(%s)",
+        (REALTIME_FETCH_LOCK_KEY,),
+    )
+
+    # 계속 쌓이기만 하면 테이블이 무한히 커지므로, 확인하는 김에
+    # 이미 윈도우를 벗어난 오래된 행도 같이 정리한다.
+    connection.execute(
+        "DELETE FROM realtime_fetch_log WHERE requested_at < NOW() - INTERVAL '1 hour'"
+    )
+
+    recent_count = connection.execute(
+        f"""
+        SELECT COUNT(*) FROM realtime_fetch_log
+        WHERE requested_at > NOW() - INTERVAL '{REALTIME_FETCH_RATE_WINDOW_SECONDS} seconds'
+        """
+    ).fetchone()[0]
+
+    if recent_count >= REALTIME_FETCH_RATE_LIMIT:
+        connection.commit()  # 락 해제 + DELETE 반영
+        return False
+
+    connection.execute(
+        "INSERT INTO realtime_fetch_log (requested_at) VALUES (NOW())"
+    )
+    connection.commit()  # 락 해제 + 예약 확정
+    return True
+
+
+def fetch_realtime_articles(query):
+    """한 번도 수집된 적 없는 검색어를 그 자리에서 네이버 API로 가져온다.
+
+    일부러 DB 커넥션을 인자로 받지 않는다 — 커넥션 풀은 최대 10개뿐인데,
+    이 호출은 최악의 경우 몇 초가 걸리는 네트워크 I/O다. 커넥션을 쥔 채로
+    이 함수를 부르면 그 몇 초 동안 풀의 커넥션 하나가 그냥 대기 상태로
+    묶여서, 그사이 다른 사용자의 요청(검색·로그인 등)이 커넥션을 못 받아
+    덩달아 느려지거나 막힐 수 있다. 그래서 호출하는 쪽(home())이 DB
+    작업을 전부 끝내고 커넥션을 반납한 뒤에만 이 함수를 부르게 했다.
+
+    실패/시간초과면 None, 성공하면 변환된 기사 목록(0건일 수도 있음)을
+    반환한다.
+    """
+
+    try:
+        api_items = fetch_naver_news(
+            query=query,
+            display=ARTICLE_LIST_LIMIT,
+            sort="date",
+            max_retries=REALTIME_FETCH_MAX_RETRIES,
+            timeout=REALTIME_FETCH_TIMEOUT_SECONDS,
+        )
+    except NaverApiError:
+        return None
+
+    return convert_api_items(api_items)
+
+
+def store_realtime_articles(connection, query, articles):
+    """fetch_realtime_articles()가 가져온 기사를 저장한다.
+
+    collector.py의 collect_one()과 같은 저장 방식(ON CONFLICT (link)
+    DO NOTHING, 성공하면 last_collected_at 갱신)을 쓰되, collection_logs에는
+    남기지 않는다 — 이건 배치 실행이 아니라 사용자 요청에 곁다리로 붙은
+    조회라서, 실패해도 다음 배치가 정상 수집할 때까지 기다리는 기존
+    동작으로 돌아가면 충분하다.
+    """
+
+    for article in articles:
+        connection.execute(
+            """
+            INSERT INTO articles (
+                title, content, link, source, category, published_at
+            )
+            VALUES (%s, %s, %s, %s, %s, %s)
+            ON CONFLICT (link) DO NOTHING
+            """,
+            (
+                article["title"],
+                article["content"],
+                article["link"],
+                article["source"],
+                query,
+                article["published_at"],
+            ),
+        )
+
+    connection.execute(
+        """
+        UPDATE search_keywords
+        SET last_collected_at = NOW()
+        WHERE keyword = %s
+        """,
+        (query,),
+    )
+
+    connection.commit()
 
 
 def normalize_keyword(word):
@@ -320,14 +473,25 @@ def get_stopwords():
 
 
 def get_kiwi():
-    """형태소 분석기는 실제로 필요할 때 한 번만 생성한다."""
+    """형태소 분석기는 실제로 필요할 때 한 번만 생성한다.
+
+    gunicorn을 스레드 워커(gthread)로 돌리면 여러 스레드가 이 함수를
+    동시에 호출할 수 있다. 잠금 없이 "None이면 생성"만 하면, 두
+    스레드가 동시에 None을 보고 둘 다 Kiwi()를 만드는 경쟁이 생길 수
+    있다(락 없이 한 번 더 확인하는 이중 검사 잠금 패턴으로 막는다).
+    현재 배포 환경(ENABLE_VISUALIZATIONS=false)에서는 이 함수 자체가
+    호출되지 않아 당장 영향은 없지만, 로컬처럼 켜서 쓰거나 나중에
+    운영에서도 켜는 경우를 대비해 안전하게 만들어 둔다.
+    """
 
     global kiwi
 
     if kiwi is None:
-        from kiwipiepy import Kiwi
+        with _kiwi_init_lock:
+            if kiwi is None:
+                from kiwipiepy import Kiwi
 
-        kiwi = Kiwi()
+                kiwi = Kiwi()
 
     return kiwi
 
@@ -640,6 +804,7 @@ def home():
     category = request.args.get("category", "").strip()
 
     waiting_for_collection = False
+    got_realtime_fetch_slot = False
 
     with db.connection() as connection:
         # q 파라미터로 들어온 검색을 기록한다. 검색창 제출뿐 아니라
@@ -648,8 +813,10 @@ def home():
             record_search(connection, query, session.get("username"))
             connection.commit()
 
-        # 웹 서버는 외부 API를 호출하지 않고, collector.py가 미리
-        # 적재해 둔 articles 테이블을 조회한다.
+        # 평소에는 외부 API를 호출하지 않고 collector.py가 미리 적재해
+        # 둔 articles 테이블만 조회한다. 예외는 바로 아래: 한 번도
+        # 수집된 적 없는 검색어라 결과가 0건일 때만, 속도 제한 안에서
+        # 그 자리에서 네이버 API를 짧게 1회 불러온다(README 5.14).
         if query:
             filtered_news = search_articles(connection, query)
         elif category:
@@ -663,6 +830,15 @@ def home():
                 query,
             )
 
+            # 자리 예약까지만 여기서 하고, 실제 네이버 호출은 이
+            # with 블록을 나가 커넥션을 반납한 뒤에 한다(바로 아래
+            # 설명). 자리를 못 얻었으면(분당 상한 초과) 예약도
+            # 호출도 하지 않는다.
+            if waiting_for_collection:
+                got_realtime_fetch_slot = try_reserve_realtime_fetch_slot(
+                    connection
+                )
+
         popular_keywords = connection.execute(
             """
             SELECT keyword, count
@@ -671,6 +847,21 @@ def home():
             LIMIT 5
             """
         ).fetchall()
+    # 커넥션 풀은 최대 10개뿐인데, 아래 네이버 API 호출은 최악의 경우
+    # 몇 초가 걸리는 네트워크 I/O다. 커넥션을 쥔 채로 부르면 그 몇 초
+    # 동안 다른 요청들이 커넥션을 못 받아 덩달아 느려질 수 있어서,
+    # 위 with 블록에서 커넥션을 이미 반납한 뒤에만 호출한다.
+    if got_realtime_fetch_slot:
+        realtime_articles = fetch_realtime_articles(query)
+
+        if realtime_articles is not None:
+            with db.connection() as connection:
+                store_realtime_articles(connection, query, realtime_articles)
+                filtered_news = search_articles(connection, query)
+
+            waiting_for_collection = False
+        # 실패/시간초과면 waiting_for_collection이 True로 남아 기존
+        # "아직 수집되지 않은 키워드" 안내로 넘어간다.
 
     # 시각화는 DB가 필요 없으므로 커넥션을 반납한 뒤에 수행한다.
     if ENABLE_VISUALIZATIONS:

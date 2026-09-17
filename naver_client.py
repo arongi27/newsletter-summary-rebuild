@@ -1,7 +1,10 @@
 """네이버 뉴스 검색 API 호출과 응답 파싱을 담당한다.
 
-이 모듈은 collector.py(배치 수집기)에서만 사용한다.
-app.py(웹 서버)는 외부 API를 직접 호출하지 않고 DB만 조회한다.
+collector.py(배치 수집기)가 기본 사용처이지만, app.py(웹 서버)도
+"한 번도 수집된 적 없는 검색어"에 한해 짧은 타임아웃·재시도 없이
+1회만 이 모듈을 호출한다(README 5.14 참고). 배치는 느긋하게 재시도할
+여유가 있지만, 웹 요청은 사용자를 오래 기다리게 할 수 없으므로
+fetch_naver_news()가 timeout/max_retries를 인자로 받게 했다.
 """
 
 import html
@@ -76,12 +79,16 @@ def parse_pub_date(pub_date_text):
         return None
 
 
-def fetch_naver_news(query, display=10, sort="date", max_retries=3):
+def fetch_naver_news(query, display=10, sort="date", max_retries=3, timeout=10):
     """네이버 뉴스 검색 API에서 뉴스 목록을 가져온다.
 
     일시적 오류(네트워크 오류, 429, 5xx)는 지수 백오프로 재시도하고,
     재시도로 해결되지 않는 오류(인증 실패, 잘못된 요청, 응답 파싱 실패)는
     즉시 NaverApiError를 발생시켜 호출자가 실패를 기록하게 한다.
+
+    max_retries=1이면 재시도 없이 딱 한 번만 시도한다(대기 없이 바로
+    NaverApiError를 던짐). 웹 요청 경로(app.py)가 사용자를 기다리게
+    하지 않으려고 짧은 timeout과 함께 이 값을 쓴다.
     """
 
     if not NAVER_CLIENT_ID or not NAVER_CLIENT_SECRET:
@@ -112,7 +119,7 @@ def fetch_naver_news(query, display=10, sort="date", max_retries=3):
                 API_URL,
                 headers=headers,
                 params=params,
-                timeout=10,
+                timeout=timeout,
             )
         except requests.RequestException as error:
             last_error = f"네트워크 오류: {error}"
